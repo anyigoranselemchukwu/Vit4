@@ -1,0 +1,207 @@
+{
+  "match_id": 1,
+  "uploaded_at": "2026-04-16T08:57:59.689450+00:00",
+  "insights": {
+    "gemini": {
+      "summary": "A mid-table vs lower-mid-table clash with Bournemouth as clear favorites due to home form and Leeds' dreadful away record. Bournemouth (11th, 45 pts) have won 6 home games at Vitality Stadium this season and are pushing for a top-half finish, while Leeds (15th, 36 pts) have managed just 2 away wins all season and carry a goal difference of -10. The last meeting on 27 Sep 2025 ended 2-2 — a sign of how competitive this fixture can be. Historically, this H2H averages ~3.89 goals per game, but current form suggests a tighter, more tactical encounter. Bournemouth under Andoni Iraola play organized counter-attacking football, while Leeds rely on high pressing but are vulnerable on transitions. Eli Junior Kroupi leads Bournemouth's attack after his goal vs Arsenal, supported by Lewis Cook's midfield control. Leeds must find defensive solidity to contain the Vitality Stadium threat and exploit set pieces on the break.",
+      "key_factors": [
+        "Leeds have only 2 away wins all season — worst travel record in top half",
+        "Bournemouth have won 6 of 16 home games — consistent home fortress",
+        "Last H2H (Sep 2025) ended 2-2 — Leeds capable of away points",
+        "Leeds' GD of -10 vs Bournemouth's -1 reveals a major quality gap",
+        "Historical H2H averages nearly 4 goals per game — potential for goals"
+      ],
+      "value_assessment": "Bournemouth to Win is the primary value pick given their home dominance and Leeds' away struggles. Under 2.5 Goals aligns with current form trends from both sides. Both Teams to Score carries value based on historical H2H data, though current form leans against it.",
+      "risk_level": "LOW",
+      "insight_tags": [
+        "Home Edge",
+        "Away Form Weakness",
+        "H2H Goals",
+        "Tactical Battle",
+        "Bournemouth Favorites"
+      ],
+      "predicted_scoreline": "2-1",
+      "predicted_result": "Bournemouth Win",
+      "standings": {
+        "bournemouth": {
+          "position": 11,
+          "points": 45,
+          "gd": -1
+        },
+        "leeds_united": {
+          "position": 15,
+          "points": 36,
+          "gd": -10
+        }
+      }
+    },
+    "claude": {
+      "summary": "Both teams enter this fixture following identical 2-1 upset victories against giants — Bournemouth stunned Arsenal away, while Leeds defeated Manchester United. Despite these high-profile wins, both sides have been draw-specialists recently, with Bournemouth recording four draws in their last six matches and the previous head-to-head encounter earlier this season ending in a 2-2 stalemate. The battle of the #10s defines this game: Eli Junior Kroupi (Bournemouth) and Dominic Calvert-Lewin (Leeds) are deadlocked on 10 goals each. Bournemouth's home advantage is bolstered by their superior defensive record of 10 clean sheets compared to Leeds' 7. The odds favor a Home Win (46%) or a Draw (27%). Given that 65% of Bournemouth's matches and 58% of Leeds' matches result in BTTS, a 1-1 or 2-1 result is statistically the most probable outcome.",
+      "key_factors": [
+        "Bournemouth have recorded 15 draws this season — the most in the Premier League",
+        "Leeds arrive with momentum from a shock 2-1 win at Old Trafford",
+        "Kroupi vs Calvert-Lewin golden boot sub-battle — both on 10 goals",
+        "Bournemouth hold 10 clean sheets vs Leeds' 7 — defensive edge at home",
+        "5 of Bournemouth's last 6 games have gone Under 2.5 goals"
+      ],
+      "value_assessment": "Draw or Bournemouth Win (Double Chance) offers solid value. Under 2.5 Goals is the standout bet given both teams' low-scoring recent trends. BTTS — No is backed by Bournemouth's clean sheet frequency at Vitality Stadium.",
+      "risk_level": "MEDIUM",
+      "insight_tags": [
+        "Home Edge",
+        "Draw Specialists",
+        "Under 2.5 Goals",
+        "Low Risk Pick",
+        "BTTS No"
+      ],
+      "predicted_scoreline": "1-1",
+      "predicted_result": "Draw",
+      "form_guide": {
+        "bournemouth": "W-D-D-D-D",
+        "leeds": "W-D-D-L-L"
+      }
+    },
+    "grok": {
+      "summary": "Bournemouth host Leeds in a fixture that pits a resilient mid-table side against a promoted club fighting for Premier League survival. Bournemouth's 15 draws this season tell a story of defensive organization and missed attacking opportunities, but back-to-back results — including a stunning 2-1 win at Arsenal — prove they can be match-winners. Leeds, promoted and adapting to top-flight intensity, lack the away consistency needed to threaten a well-set Bournemouth side. Their 0-1 losses to Sunderland and Man City at home, followed by the Old Trafford upset, paint a picture of an unpredictable but dangerous side. The tactical duel centers on Bournemouth controlling the midfield through Lewis Cook and Alex Scott, forcing Leeds to defend deep and counter. Kroupi's form in front of goal will be decisive. Leeds will look to frustrate and exploit any lapses via set pieces. Expect Bournemouth to edge this one in a tight contest, with home advantage proving the difference.",
+      "key_factors": [
+        "Bournemouth's 15 draws reflect a solid defensive shape that is hard to break",
+        "Leeds' Old Trafford win shows they can upset any team on their day",
+        "Alex Scott and Lewis Cook control Bournemouth's midfield — key to tempo",
+        "Leeds have lost 12 of 32 games — third worst record in the league",
+        "Bournemouth's recent 2-1 win at Arsenal shows clinical edge when it matters"
+      ],
+      "value_assessment": "Bournemouth Win at home is the most backed prediction across all models. Under 2.5 Goals is a consistent theme given both teams' recent low-scoring games. Bournemouth Win & Under 2.5 Combined represents the highest-confidence single bet for this fixture.",
+      "risk_level": "LOW",
+      "insight_tags": [
+        "Home Edge",
+        "Midfield Control",
+        "Counter Attack",
+        "Set Piece Threat",
+        "Win & Under 2.5"
+      ],
+      "predicted_scoreline": "2-1",
+      "predicted_result": "Bournemouth Win",
+      "form_guide": {
+        "bournemouth": "W-D-D-D-D",
+        "leeds": "W-D-D-L-L"
+      }
+    }
+  },
+  "original": {
+    "match_overview": {
+      "fixture": "AFC Bournemouth vs Leeds United FC",
+      "competition": "Premier League 2025/26",
+      "date": "2026-04-22",
+      "kickoff_time": "20:00 UK | 19:00 UTC",
+      "stadium": "Vitality Stadium, Bournemouth, England"
+    },
+    "insights": {
+      "claude": {
+        "summary": "Both teams enter this fixture following identical 2-1 upset victories against giants — Bournemouth stunned Arsenal away, while Leeds defeated Manchester United. Despite these high-profile wins, both sides have been draw-specialists recently, with Bournemouth recording four draws in their last six matches and the previous head-to-head encounter earlier this season ending in a 2-2 stalemate. The battle of the #10s defines this game: Eli Junior Kroupi (Bournemouth) and Dominic Calvert-Lewin (Leeds) are deadlocked on 10 goals each. Bournemouth's home advantage is bolstered by their superior defensive record of 10 clean sheets compared to Leeds' 7. The odds favor a Home Win (46%) or a Draw (27%). Given that 65% of Bournemouth's matches and 58% of Leeds' matches result in BTTS, a 1-1 or 2-1 result is statistically the most probable outcome.",
+        "key_factors": [
+          "Bournemouth have recorded 15 draws this season — the most in the Premier League",
+          "Leeds arrive with momentum from a shock 2-1 win at Old Trafford",
+          "Kroupi vs Calvert-Lewin golden boot sub-battle — both on 10 goals",
+          "Bournemouth hold 10 clean sheets vs Leeds' 7 — defensive edge at home",
+          "5 of Bournemouth's last 6 games have gone Under 2.5 goals"
+        ],
+        "value_assessment": "Draw or Bournemouth Win (Double Chance) offers solid value. Under 2.5 Goals is the standout bet given both teams' low-scoring recent trends. BTTS — No is backed by Bournemouth's clean sheet frequency at Vitality Stadium.",
+        "risk_level": "MEDIUM",
+        "insight_tags": [
+          "Home Edge",
+          "Draw Specialists",
+          "Under 2.5 Goals",
+          "Low Risk Pick",
+          "BTTS No"
+        ],
+        "predicted_scoreline": "1-1",
+        "predicted_result": "Draw",
+        "form_guide": {
+          "bournemouth": "W-D-D-D-D",
+          "leeds": "W-D-D-L-L"
+        }
+      },
+      "gemini": {
+        "summary": "A mid-table vs lower-mid-table clash with Bournemouth as clear favorites due to home form and Leeds' dreadful away record. Bournemouth (11th, 45 pts) have won 6 home games at Vitality Stadium this season and are pushing for a top-half finish, while Leeds (15th, 36 pts) have managed just 2 away wins all season and carry a goal difference of -10. The last meeting on 27 Sep 2025 ended 2-2 — a sign of how competitive this fixture can be. Historically, this H2H averages ~3.89 goals per game, but current form suggests a tighter, more tactical encounter. Bournemouth under Andoni Iraola play organized counter-attacking football, while Leeds rely on high pressing but are vulnerable on transitions. Eli Junior Kroupi leads Bournemouth's attack after his goal vs Arsenal, supported by Lewis Cook's midfield control. Leeds must find defensive solidity to contain the Vitality Stadium threat and exploit set pieces on the break.",
+        "key_factors": [
+          "Leeds have only 2 away wins all season — worst travel record in top half",
+          "Bournemouth have won 6 of 16 home games — consistent home fortress",
+          "Last H2H (Sep 2025) ended 2-2 — Leeds capable of away points",
+          "Leeds' GD of -10 vs Bournemouth's -1 reveals a major quality gap",
+          "Historical H2H averages nearly 4 goals per game — potential for goals"
+        ],
+        "value_assessment": "Bournemouth to Win is the primary value pick given their home dominance and Leeds' away struggles. Under 2.5 Goals aligns with current form trends from both sides. Both Teams to Score carries value based on historical H2H data, though current form leans against it.",
+        "risk_level": "LOW",
+        "insight_tags": [
+          "Home Edge",
+          "Away Form Weakness",
+          "H2H Goals",
+          "Tactical Battle",
+          "Bournemouth Favorites"
+        ],
+        "predicted_scoreline": "2-1",
+        "predicted_result": "Bournemouth Win",
+        "standings": {
+          "bournemouth": {
+            "position": 11,
+            "points": 45,
+            "gd": -1
+          },
+          "leeds_united": {
+            "position": 15,
+            "points": 36,
+            "gd": -10
+          }
+        }
+      },
+      "grok": {
+        "summary": "Bournemouth host Leeds in a fixture that pits a resilient mid-table side against a promoted club fighting for Premier League survival. Bournemouth's 15 draws this season tell a story of defensive organization and missed attacking opportunities, but back-to-back results — including a stunning 2-1 win at Arsenal — prove they can be match-winners. Leeds, promoted and adapting to top-flight intensity, lack the away consistency needed to threaten a well-set Bournemouth side. Their 0-1 losses to Sunderland and Man City at home, followed by the Old Trafford upset, paint a picture of an unpredictable but dangerous side. The tactical duel centers on Bournemouth controlling the midfield through Lewis Cook and Alex Scott, forcing Leeds to defend deep and counter. Kroupi's form in front of goal will be decisive. Leeds will look to frustrate and exploit any lapses via set pieces. Expect Bournemouth to edge this one in a tight contest, with home advantage proving the difference.",
+        "key_factors": [
+          "Bournemouth's 15 draws reflect a solid defensive shape that is hard to break",
+          "Leeds' Old Trafford win shows they can upset any team on their day",
+          "Alex Scott and Lewis Cook control Bournemouth's midfield — key to tempo",
+          "Leeds have lost 12 of 32 games — third worst record in the league",
+          "Bournemouth's recent 2-1 win at Arsenal shows clinical edge when it matters"
+        ],
+        "value_assessment": "Bournemouth Win at home is the most backed prediction across all models. Under 2.5 Goals is a consistent theme given both teams' recent low-scoring games. Bournemouth Win & Under 2.5 Combined represents the highest-confidence single bet for this fixture.",
+        "risk_level": "LOW",
+        "insight_tags": [
+          "Home Edge",
+          "Midfield Control",
+          "Counter Attack",
+          "Set Piece Threat",
+          "Win & Under 2.5"
+        ],
+        "predicted_scoreline": "2-1",
+        "predicted_result": "Bournemouth Win",
+        "form_guide": {
+          "bournemouth": "W-D-D-D-D",
+          "leeds": "W-D-D-L-L"
+        }
+      }
+    },
+    "consensus": {
+      "majority_result": "Bournemouth Win",
+      "agents_on_bournemouth_win": 2,
+      "agents_on_draw": 1,
+      "unanimous_value_bets": [
+        "Under 2.5 Goals",
+        "Bournemouth Win or Draw (Double Chance)"
+      ],
+      "shared_insight_tags": [
+        "Home Edge",
+        "Under 2.5 Goals",
+        "Away Form Weakness"
+      ],
+      "risk_consensus": "LOW to MEDIUM"
+    },
+    "metadata": {
+      "agents": [
+        "Claude (Anthropic)",
+        "Gemini (Google)",
+        "Grok (xAI)"
+      ],
+      "data_as_of": "2026-04-16",
+      "disclaimer": "All insights are for informational and entertainment purposes only. Please gamble responsibly."
+    }
+  }
+}
