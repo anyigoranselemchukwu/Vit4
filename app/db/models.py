@@ -378,6 +378,15 @@ class User(Base):
     wallet = relationship("Wallet", back_populates=None, uselist=False, viewonly=True)
     wallet_transactions = relationship("WalletTransaction", foreign_keys="WalletTransaction.user_id", viewonly=True)
 
+    # Notification module relationships (Module K)
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    # Trust module relationships (Module I)
+    trust_score = relationship("UserTrustScore", foreign_keys="UserTrustScore.user_id", uselist=False, viewonly=True)
+    fraud_flags = relationship("FraudFlag", foreign_keys="FraudFlag.user_id", viewonly=True)
+    risk_events = relationship("RiskEvent", foreign_keys="RiskEvent.user_id", viewonly=True)
+
     __table_args__ = (
         Index('idx_users_email', 'email'),
         Index('idx_users_role', 'role'),

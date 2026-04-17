@@ -14,10 +14,21 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from fastapi.middleware.gzip import GZipMiddleware
 from app.config import get_env, APP_VERSION
 from app.db.database import engine, Base, get_db, _is_sqlite
 import app.db.models  # ensure all models registered
 import app.modules.wallet.models  # register wallet models with SQLAlchemy
+import app.modules.blockchain.models  # register blockchain models with SQLAlchemy
+import app.modules.training.models  # register training module models with SQLAlchemy
+import app.modules.ai.models  # register Module E models (ModelMetadata, AIPredictionAudit)
+import app.data.models  # register Module F models (MatchFeatureStore, PipelineRun)
+import app.modules.notifications.models  # register Module K notification models
+import app.modules.marketplace.models    # register Module G marketplace models
+import app.modules.trust.models          # register Module I trust models
+import app.modules.bridge.models         # register Module J bridge models
+import app.modules.developer.models      # register Module L developer models
+import app.modules.governance.models     # register Module M governance models
 
 # ===== CORE ROUTES =====
 from app.api.routes import (
@@ -40,14 +51,49 @@ from app.auth.routes import router as auth_router
 # ===== WALLET ROUTES (Phase 1) =====
 from app.modules.wallet.routes import router as wallet_router
 from app.modules.wallet.admin_routes import router as wallet_admin_router
+from app.modules.wallet.webhooks import router as webhooks_router
 
-# ===== BLOCKCHAIN ROUTES (Phase 4 — not yet built) =====
-# from app.blockchain.routes import router as blockchain_router
+# ===== BLOCKCHAIN ROUTES (Phase 4) =====
+from app.modules.blockchain.routes import router as blockchain_router
+from app.modules.blockchain.oracle import router as oracle_router
+
+# ===== TRAINING MODULE ROUTES (Module D) =====
+from app.modules.training.routes import router as training_module_router
+
+# ===== AI ORCHESTRATION ROUTES (Module E) =====
+from app.modules.ai.routes import router as ai_engine_router
+
+# ===== DASHBOARD ROUTES =====
+from app.api.routes.dashboard import router as dashboard_router
+
+# ===== DATA PIPELINE ROUTES (Module F) =====
+from app.data.routes import router as pipeline_router
+from app.data.pipeline import etl_pipeline_loop, odds_refresh_loop
+from app.core.cache import cache_background_purge_loop
+
+# ===== NOTIFICATION ROUTES (Module K) =====
+from app.modules.notifications.routes import router as notifications_router
+
+# ===== MARKETPLACE ROUTES (Module G) =====
+from app.modules.marketplace.routes import router as marketplace_router
+
+# ===== TRUST ROUTES (Module I) =====
+from app.modules.trust.routes import router as trust_router
+
+# ===== BRIDGE ROUTES (Module J) =====
+from app.modules.bridge.routes import router as bridge_router
+
+# ===== DEVELOPER ROUTES (Module L) =====
+from app.modules.developer.routes import router as developer_router
+
+# ===== GOVERNANCE ROUTES (Module M) =====
+from app.modules.governance.routes import router as governance_router
 
 # ===== MIDDLEWARE =====
 from app.api.middleware.auth import APIKeyMiddleware
 from app.api.middleware.logging import LoggingMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
+from app.api.middleware.security import SecurityHeadersMiddleware
 
 # ===== SERVICES =====
 from app.schemas.schemas import HealthResponse
@@ -79,8 +125,21 @@ async def auto_settle_loop():
     while True:
         if os.getenv("FOOTBALL_DATA_API_KEY"):
             try:
-                result = await settle_results(days_back=2)
-                print(f"[settlement] {result}")
+                from app.db.database import AsyncSessionLocal
+                from app.modules.ai.weight_adjuster import adjust_weights_for_match
+                settlement_result = await settle_results(days_back=2)
+                print(f"[settlement] {settlement_result}")
+
+                # E3 — weight adjustment for each newly settled match
+                settled_matches = settlement_result if isinstance(settlement_result, list) else []
+                if settled_matches:
+                    orch = get_orchestrator()
+                    async with AsyncSessionLocal() as db:
+                        for match_info in settled_matches:
+                            mid = str(match_info.get("match_id", ""))
+                            outcome = match_info.get("outcome")
+                            if mid and outcome:
+                                await adjust_weights_for_match(db, orch, mid, outcome)
             except Exception as e:
                 print(f"[settlement] ERROR: {e}")
         await asyncio.sleep(_SETTLEMENT_INTERVAL_HOURS * 3600)
@@ -106,6 +165,19 @@ async def vitcoin_pricing_loop():
     pass  # stub until app.wallet.pricing is built (Phase 1)
 
 
+async def subscription_expiry_loop():
+    """Module K — check every 12h and warn users about expiring subscriptions."""
+    from app.db.database import AsyncSessionLocal
+    from app.modules.notifications.service import NotificationService
+    while True:
+        await asyncio.sleep(12 * 3600)
+        try:
+            async with AsyncSessionLocal() as db:
+                await NotificationService.check_subscription_expiry(db)
+        except Exception as e:
+            print(f"[notifications] subscription expiry check error: {e}")
+
+
 # ============================================
 # LIFECYCLE
 # ============================================
@@ -119,10 +191,73 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     print("✅ Database ready")
 
+    # SEED PLATFORM CONFIG DEFAULTS
+    try:
+        from app.db.database import AsyncSessionLocal
+        from app.modules.wallet.models import PlatformConfig
+        from sqlalchemy import select as _select
+
+        _default_configs = [
+            ("fee_rates", {"deposit": 0.01, "withdrawal": 0.02, "conversion": 0.005}, "Platform fee rates"),
+            ("vitcoin_min_stake", {"amount": 10, "validator_min": 100}, "Minimum VITCoin stake amounts"),
+            ("withdrawal_limits", {"daily_usd": 1000, "daily_ngn": 500000, "daily_usdt": 1000}, "Daily withdrawal limits"),
+            ("deposit_limits", {"min_usd": 1, "min_ngn": 500, "max_usd": 10000}, "Deposit limits"),
+            ("vitcoin_supply", {"initial": 1000000, "burned": 0, "reserved": 100000}, "VITCoin supply parameters"),
+            ("platform_treasury", {"address": "vit_treasury_001"}, "Platform treasury wallet reference"),
+        ]
+        async with AsyncSessionLocal() as _db:
+            for key, value, desc in _default_configs:
+                existing = (await _db.execute(_select(PlatformConfig).where(PlatformConfig.key == key))).scalar_one_or_none()
+                if not existing:
+                    _db.add(PlatformConfig(key=key, value=value, description=desc))
+            await _db.commit()
+        print("✅ PlatformConfig defaults seeded")
+    except Exception as _e:
+        print(f"⚠️  PlatformConfig seeding failed: {_e}")
+
+    # SEED DEFAULT ADMIN ACCOUNT
+    try:
+        import os as _os
+        from app.db.database import AsyncSessionLocal
+        from app.db.models import User as _User
+        from app.auth.jwt_utils import hash_password
+        from sqlalchemy import select as _select
+
+        _admin_email = _os.environ.get("ADMIN_EMAIL", "admin@vit.network")
+        _admin_pass = _os.environ.get("ADMIN_PASSWORD", "VitAdmin2025!")
+        _admin_user = _os.environ.get("ADMIN_USERNAME", "vit_admin")
+
+        async with AsyncSessionLocal() as _db:
+            _exists = (await _db.execute(_select(_User).where(_User.email == _admin_email))).scalar_one_or_none()
+            if not _exists:
+                _db.add(_User(
+                    email=_admin_email,
+                    username=_admin_user,
+                    hashed_password=hash_password(_admin_pass),
+                    role="admin",
+                    is_active=True,
+                ))
+                await _db.commit()
+                print(f"✅ Default admin created: {_admin_email}")
+            else:
+                print(f"✅ Admin account found: {_admin_email}")
+    except Exception as _e:
+        print(f"⚠️  Admin seeding failed: {_e}")
+
     # SERVICES
     orchestrator = get_orchestrator()
     if orchestrator:
         print(f"✅ ML Models: {orchestrator.num_models_ready()} ready")
+
+    # E1 — Bootstrap model registry
+    try:
+        from app.db.database import AsyncSessionLocal
+        from app.modules.ai.registry import bootstrap_registry
+        async with AsyncSessionLocal() as _db:
+            inserted = await bootstrap_registry(_db, orchestrator)
+            print(f"✅ AI Model Registry: {inserted} new entries bootstrapped")
+    except Exception as _e:
+        print(f"⚠️  AI Registry bootstrap failed: {_e}")
 
     alerts = get_telegram_alerts()
     if alerts and alerts.enabled:
@@ -133,6 +268,10 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(auto_settle_loop()),
         asyncio.create_task(model_accountability_loop()),
         asyncio.create_task(vitcoin_pricing_loop()),
+        asyncio.create_task(etl_pipeline_loop()),               # Module F: full ETL every 6h
+        asyncio.create_task(odds_refresh_loop()),                # Module F: odds refresh every 15m
+        asyncio.create_task(subscription_expiry_loop()),        # Module K: subscription expiry warnings
+        asyncio.create_task(cache_background_purge_loop(300)),  # Purge expired cache entries every 5m
     ]
 
     print("✅ Background services started")
@@ -171,6 +310,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
@@ -199,9 +340,41 @@ app.include_router(auth_router)
 # Wallet (Phase 1)
 app.include_router(wallet_router)
 app.include_router(wallet_admin_router)
+app.include_router(webhooks_router)
 
-# Blockchain (Phase 4 — not yet built)
-# app.include_router(blockchain_router, prefix="/api/blockchain")
+# Blockchain (Phase 4)
+app.include_router(blockchain_router)
+app.include_router(oracle_router)
+
+# Training Module (Module D)
+app.include_router(training_module_router)
+
+# AI Orchestration (Module E)
+app.include_router(ai_engine_router)
+
+# Dashboard
+app.include_router(dashboard_router)
+
+# Data Pipeline (Module F)
+app.include_router(pipeline_router)
+
+# Notifications (Module K)
+app.include_router(notifications_router)
+
+# Marketplace (Module G)
+app.include_router(marketplace_router)
+
+# Trust & Anti-Fraud (Module I)
+app.include_router(trust_router)
+
+# Cross-Chain Bridge (Module J)
+app.include_router(bridge_router)
+
+# Developer Platform (Module L)
+app.include_router(developer_router)
+
+# Governance (Module M)
+app.include_router(governance_router)
 
 
 # ============================================

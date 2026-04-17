@@ -36,7 +36,7 @@ def get_data_loader() -> Optional[DataLoader]:
         loader = DataLoader(
             api_key=football_api_key,
             odds_api_key=odds_api_key,
-            enable_scraping=os.getenv("ENABLE_SCRAPING", "true").lower() == "true",
+            enable_scraping=os.getenv("ENABLE_SCRAPING", "false").lower() == "true",
             enable_odds=os.getenv("ENABLE_ODDS", "true").lower() == "true"
         )
         print(f"✅ DataLoader initialized (scraping={loader.enable_scraping}, odds={loader.enable_odds})")
