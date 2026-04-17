@@ -1,0 +1,515 @@
+🏗️ VIT ECOSYSTEM — MODULE-BY-MODULE BUILD OUTLINE
+
+The Only Way This Gets Built (Without Dying)
+
+You cannot build everything at once. Here is the exact order of execution.
+
+
+---
+
+📋 PHASE 0: FOUNDATION (Weeks 1-2)
+
+What Exists Already
+
+✅ FastAPI backend  
+✅ React frontend  
+✅ PostgreSQL database  
+✅ Authentication (users, sessions, roles)  
+✅ 12 ML models (Poisson, XGBoost, LSTM, etc.)  
+✅ Prediction API endpoint  
+✅ Telegram alerts  
+✅ CLV tracking  
+✅ Edge database
+
+What Needs Setup First
+
+Module B1: Database Models (wallet/models.py)  
+Module C1: Blockchain Models (blockchain/models.py)  
+Module D1: Training Models (training/models.py)  
+  
+Run migrations:  
+  alembic revision --autogenerate -m "add_economy_tables"  
+  alembic upgrade head
+
+
+---
+
+🚀 PHASE 1: CORE ECONOMY (Weeks 3-6) — BUILD FIRST
+
+Module B — Wallet & Payment Engine
+
+Priority: HIGHEST (without this, no economy)  
+  
+Order of implementation:  
+  
+B1. Database Models  
+  ├── wallet.py  
+  ├── transaction.py  
+  ├── subscription_plan.py  
+  ├── user_subscription.py  
+  ├── withdrawal_request.py  
+  └── platform_config.py  
+  
+B2. VITCoin Price Engine  
+  ├── pricing.py (revenue calculation)  
+  └── VITCoinPriceHistory table  
+  
+B3. Wallet Routes  
+  ├── GET  /api/wallet/me  
+  ├── GET  /api/wallet/transactions  
+  ├── POST /api/wallet/deposit/initiate  
+  ├── POST /api/wallet/deposit/verify  
+  ├── POST /api/wallet/convert  
+  ├── POST /api/wallet/withdraw  
+  └── POST /api/wallet/subscribe  
+  
+B4. Admin Routes  
+  ├── GET    /api/admin/wallet/withdrawals  
+  ├── POST   /api/admin/wallet/withdrawals/{id}/approve  
+  ├── POST   /api/admin/wallet/withdrawals/{id}/reject  
+  ├── GET    /api/admin/wallet/config  
+  ├── PATCH  /api/admin/wallet/config  
+  ├── GET    /api/admin/wallet/plans  
+  ├── POST   /api/admin/wallet/plans  
+  ├── PATCH  /api/admin/wallet/plans/{id}  
+  └── GET    /api/admin/wallet/overview  
+  
+B5. Payment Webhooks  
+  ├── POST /api/webhooks/paystack  
+  ├── POST /api/webhooks/stripe  
+  ├── POST /api/webhooks/usdt  
+  └── POST /api/webhooks/pi
+
+Success Criteria:
+
+· Users can deposit NGN, USD, USDT, PI
+· Users have wallet balances
+· VITCoin price calculates from revenue
+· Withdrawals work with auto-approval rules
+
+
+---
+
+🧠 PHASE 2: AI ORCHESTRATION (Weeks 7-10)
+
+Module E — AI Engine Orchestration Layer
+
+Priority: HIGH (controls your 216 models)  
+  
+E1. Model Registry (ai/models.py)  
+  ├── ModelMetadata table  
+  ├── Register existing 12 models  
+  ├── Track version, accuracy, weight  
+  └── API to list/update models  
+  
+E2. Ensemble Orchestrator (ai/orchestrator.py)  
+  ├── Function: generate_ai_prediction(match_id)  
+  ├── Load all active models  
+  ├── Weighted aggregation (weight × accuracy)  
+  ├── Confidence calculation (variance reduction)  
+  ├── Risk score (entropy of distribution)  
+  └── Return structured AI signal  
+  
+E3. Model Weight Adjuster  
+  ├── Auto-adjust weights based on performance  
+  ├── new_weight = old_weight × (1 + performance_delta)  
+  └── Bad models fade into irrelevance  
+  
+E4. AI Audit Log  
+  ├── Store every prediction  
+  ├── For transparency  
+  ├── For validator comparison  
+  └── For future training
+
+Success Criteria:
+
+· All 12 models registered
+· Ensemble produces weighted predictions
+· Confidence scores are meaningful
+· Audit log stores every prediction
+
+
+---
+
+📡 PHASE 3: DATA PIPELINE (Weeks 11-14)
+
+Module F — Data Ingestion & Pipeline
+
+Priority: HIGH (AI is useless without data)  
+  
+F1. Data Sources (data/sources.py)  
+  ├── Football APIs (fixtures, stats) — already have  
+  ├── Odds providers — already have  
+  ├── Historical datasets — generate  
+  └── Web scraping fallback — already have  
+  
+F2. ETL Pipeline (data/pipeline.py)  
+  ├── Fetch → Clean → Normalize → Feature Engineer → Store  
+  ├── MatchFeatureStore table  
+  ├── match_id, features JSON, created_at  
+  └── Scheduled every 6 hours  
+  
+F3. Real-time Updater  
+  ├── WebSocket feeds for live odds  
+  ├── Injury/news ingestion  
+  ├── Lineup updates  
+  └── Triggers re-prediction
+
+Success Criteria:
+
+· Historical matches loaded
+· Features stored in database
+· Real-time odds updating
+· Injuries ingested within 5 minutes
+
+
+---
+
+🏛️ PHASE 4: BLOCKCHAIN ECONOMY (Weeks 15-20)
+
+Module C — Blockchain Economy Layer
+
+Priority: MEDIUM-HIGH (requires wallet first)  
+  
+C1. Database Models (blockchain/models.py)  
+  ├── ValidatorProfile  
+  ├── ValidatorPrediction  
+  ├── ConsensusPrediction  
+  ├── OracleResult  
+  ├── MatchSettlement  
+  └── UserStake  
+  
+C2. Consensus Engine (blockchain/consensus.py)  
+  ├── calculate_consensus(match_id)  
+  ├── Weighted validator consensus  
+  ├── Blend AI (60%) + Validators (40%)  
+  └── Save ConsensusPrediction  
+  
+C3. Settlement Engine (blockchain/settlement.py)  
+  ├── settle_match(match_id)  
+  ├── Calculate pools  
+  ├── Distribute fees (40/30/20/10)  
+  ├── Pay winners  
+  ├── Distribute validator rewards  
+  └── Burn 20% of fees  
+  
+C4. Blockchain Routes  
+  ├── GET  /api/blockchain/predictions/{match_id}  
+  ├── POST /api/blockchain/predictions/{match_id}/stake  
+  ├── GET  /api/blockchain/stakes/my  
+  ├── GET  /api/blockchain/validators  
+  ├── POST /api/blockchain/validators/apply  
+  ├── POST /api/blockchain/validators/predict  
+  ├── GET  /api/blockchain/validators/my  
+  └── GET  /api/blockchain/economy  
+  
+C5. Oracle System (blockchain/oracle.py)  
+  ├── POST /api/oracle/result (internal)  
+  ├── 2-of-3 consensus  
+  ├── Dispute flagging  
+  └── GET /api/admin/oracle/disputes
+
+Success Criteria:
+
+· Users can stake VITCoin on predictions
+· Validators submit predictions
+· Consensus calculates final probabilities
+· Settlements distribute rewards correctly
+· Oracle confirms match results
+
+
+---
+
+📊 PHASE 5: ANALYTICS & DASHBOARD (Weeks 21-24)
+
+Module H — Analytics & Intelligence Dashboard
+
+Priority: MEDIUM (needs data first)  
+  
+H1. System Metrics  
+  ├── Total volume  
+  ├── Active users  
+  ├── Prediction accuracy  
+  ├── Validator performance  
+  └── API endpoints for frontend  
+  
+H2. User Analytics  
+  ├── Profit/loss per user  
+  ├── Win rate  
+  ├── Stake distribution  
+  └── Leaderboards  
+  
+H3. Validator Leaderboard  
+  ├── Trust score ranking  
+  ├── ROI ranking  
+  ├── Accuracy %  
+  └── Gamification elements
+
+Success Criteria:
+
+· Dashboard shows real metrics
+· Users can see their performance
+· Validators compete on leaderboard
+
+
+---
+
+📣 PHASE 6: NOTIFICATIONS (Weeks 25-26)
+
+Module K — Notifications & Real-Time System
+
+Priority: MEDIUM (engagement matters)  
+  
+K1. Notification Types  
+  ├── Prediction alerts  
+  ├── Match results  
+  ├── Wallet activity  
+  ├── Validator rewards  
+  └── Subscription expirations  
+  
+K2. Delivery Channels  
+  ├── WebSocket (real-time)  
+  ├── Email  
+  ├── Telegram (already have)  
+  └── In-app  
+  
+K3. Implementation  
+  ├── Notification queue  
+  ├── Template system  
+  ├── User preferences  
+  └── Rate limiting
+
+Success Criteria:
+
+· Users receive real-time alerts
+· Telegram integration works
+· Email notifications work
+
+
+---
+
+🏪 PHASE 7: AI MARKETPLACE (Weeks 27-30)
+
+Module G — AI Marketplace
+
+Priority: LOW (requires developers first)  
+  
+G1. Model Listings (marketplace/models.py)  
+  ├── AIModelListing table  
+  ├── creator_id, model_id  
+  ├── price_per_call (VITCoin)  
+  ├── rating, usage_count  
+  
+G2. API Monetization  
+  ├── User calls model → pays VITCoin  
+  ├── Creator earns → protocol takes 15%  
+  └── Usage tracking  
+  
+G3. Reputation System  
+  ├── Model accuracy  
+  ├── User ratings  
+  ├── Revenue generated  
+  └── Bad models get exposed
+
+Success Criteria:
+
+· Third-party developers can list models
+· Users can purchase predictions
+· Protocol earns commission
+
+
+---
+
+🔐 PHASE 8: TRUST & FRAUD (Weeks 31-34)
+
+Module I — Trust, Reputation & Anti-Fraud
+
+Priority: LOW (scale requires it)  
+  
+I1. User Trust Score  
+  ├── transaction behavior  
+  ├── prediction history  
+  ├── fraud signals  
+  └── Score = weighted combination  
+  
+I2. Fraud Detection Engine  
+  ├── Multi-account detection  
+  ├── Suspicious betting patterns  
+  ├── Abnormal withdrawals  
+  └── Automated flagging  
+  
+I3. Risk Flags  
+  ├── High-risk users  
+  ├── Suspicious matches  
+  ├── Abnormal validator behavior  
+  └── Admin review queue
+
+Success Criteria:
+
+· Suspicious activity detected
+· Admin can review flags
+· False positive rate < 5%
+
+
+---
+
+🌉 PHASE 9: CROSS-CHAIN (Weeks 35-38)
+
+Module J — Cross-Chain & Bridge Layer
+
+Priority: LOW (Phase 2)  
+  
+J1. Bridge Contracts (Phase 2 ready)  
+  ├── VIT ↔ USDT  
+  ├── VIT ↔ ETH  
+  └── Smart contract design  
+  
+J2. Off-chain Bridge Service  
+  ├── Lock/mint mechanism  
+  ├── Transaction proofs  
+  ├── Audit logs  
+  └── Relayer service
+
+Success Criteria:
+
+· Users can bridge VIT to Ethereum
+· Contracts audited
+· Relayer running
+
+
+---
+
+🧩 PHASE 10: DEVELOPER PLATFORM (Weeks 39-42)
+
+Module L — Developer Platform & SDK
+
+Priority: LOW (needs marketplace first)  
+  
+L1. SDKs  
+  ├── TypeScript SDK  
+  ├── Python SDK  
+  └── Documentation  
+  
+L2. API Gateway  
+  ├── Rate limiting  
+  ├── API key management  
+  ├── Usage billing  
+  └── Analytics  
+  
+L3. Dev Portal  
+  ├── Docs  
+  ├── Sandbox  
+  ├── API explorer  
+  └── Discord community
+
+Success Criteria:
+
+· 10 external developers building
+· SDKs published to npm/PyPI
+· API keys issued
+
+
+---
+
+🏛️ PHASE 11: GOVERNANCE (Weeks 43-46)
+
+Module M — Governance Layer
+
+Priority: LOW (Phase 2)  
+  
+M1. Proposal System  
+  ├── Change fees  
+  ├── Update parameters  
+  ├── Approve new features  
+  └── Proposal creation  
+  
+M2. Voting  
+  ├── Voting power = stake × trust  
+  ├── Vote submission  
+  ├── Vote tallying  
+  └── Execution  
+  
+M3. Execution  
+  ├── Admin-controlled initially  
+  ├── Decentralized later  
+  └── Timelock for security
+
+Success Criteria:
+
+· Proposals can be created
+· Voting works
+· Parameters update via governance
+
+
+---
+
+📋 MODULE D: AI TRAINING GUIDE (Can be built anytime after Phase 3)
+
+Module D — AI Training Guide & Prompt Generator
+
+Priority: When you have training data  
+  
+D1. Database Models  
+  ├── TrainingJob table  
+  └── TrainingGuideStep table  
+  
+D2. Data Quality Scorer  
+  ├── score_dataset() function  
+  ├── Completeness (25%)  
+  ├── Sample Size (20%)  
+  ├── Recency (20%)  
+  ├── Feature Coverage (20%)  
+  ├── Variance (15%)  
+  └── Quality score 0-100  
+  
+D3. AI Prompt Generator  
+  ├── generate_training_prompt()  
+  ├── Uses column_profile, quality_score  
+  └── Produces structured prompt
+
+
+---
+
+📊 BUILD ORDER SUMMARY
+
+Phase Modules Weeks Dependencies
+0 Foundation 1-2 None
+1 B (Wallet) 3-6 Auth
+2 E (AI Orchestration) 7-10 B
+3 F (Data Pipeline) 11-14 E
+4 C (Blockchain) 15-20 B, E
+5 H (Analytics) 21-24 C, F
+6 K (Notifications) 25-26 C
+7 G (Marketplace) 27-30 C, E
+8 I (Trust/Fraud) 31-34 C, H
+9 J (Cross-chain) 35-38 C
+10 L (Developer) 39-42 G
+11 M (Governance) 43-46 C
+D Training Anytime F
+
+
+---
+
+✅ IMMEDIATE NEXT STEPS (This Week)
+
+Day 1-2:  
+  - Create all new models (B1, C1, D1)  
+  - Run migrations  
+  - Verify tables created  
+  
+Day 3-4:  
+  - Implement B2 (VITCoin price engine)  
+  - Test price calculation  
+  
+Day 5-7:  
+  - Implement B3 (wallet routes)  
+  - Test deposits and withdrawals  
+  
+By end of Week 2:  
+  - Wallet working  
+  - Users have balances  
+  - VITCoin price updating
+
+Ready to start with Module B? 🚀
+
+Let's build the real one instead you will generate all the production ready codes and file step by step
