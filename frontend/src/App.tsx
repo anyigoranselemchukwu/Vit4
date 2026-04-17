@@ -22,6 +22,8 @@ import TrustPage from "@/pages/trust";
 import BridgePage from "@/pages/bridge";
 import DeveloperPage from "@/pages/developer";
 import GovernancePage from "@/pages/governance";
+import AccumulatorPage from "@/pages/accumulator";
+import OddsPage from "@/pages/odds";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +97,12 @@ function Router() {
       </Route>
       <Route path="/admin">
         <Layout><ProtectedRoute component={AdminPage} /></Layout>
+      </Route>
+      <Route path="/accumulator">
+        <Layout><ProtectedRoute component={AccumulatorPage} /></Layout>
+      </Route>
+      <Route path="/odds">
+        <Layout><ProtectedRoute component={OddsPage} /></Layout>
       </Route>
       <Route>
         <Layout><NotFound /></Layout>

@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 
 from fastapi.middleware.gzip import GZipMiddleware
 from app.config import get_env, APP_VERSION
@@ -424,6 +424,39 @@ async def system_status(db: AsyncSession = Depends(get_db)):
     orch = get_orchestrator()
     loader = get_data_loader()
 
+    # User stats
+    from app.db.models import User, Prediction, CLVEntry
+    from app.modules.wallet.models import Wallet, WalletTransaction
+    from decimal import Decimal
+    import datetime
+
+    total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    active_30d = (await db.execute(
+        select(func.count(User.id)).where(User.created_at >= thirty_days_ago)
+    )).scalar() or 0
+    validators = (await db.execute(
+        select(func.count(User.id)).where(User.role == "validator")
+    )).scalar() or 0
+
+    # Economy stats
+    total_staked_vit = Decimal("0")
+    total_profit = Decimal("0")
+    platform_volume = Decimal("0")
+    try:
+        total_staked_vit = (await db.execute(
+            select(func.coalesce(func.sum(WalletTransaction.amount), 0)).where(
+                WalletTransaction.type == "stake"
+            )
+        )).scalar() or Decimal("0")
+        platform_volume = (await db.execute(
+            select(func.coalesce(func.sum(WalletTransaction.amount), 0))
+        )).scalar() or Decimal("0")
+        profit_result = (await db.execute(select(func.coalesce(func.sum(CLVEntry.profit), 0)))).scalar()
+        total_profit = profit_result or Decimal("0")
+    except Exception:
+        pass
+
     return {
         "status": "operational",
         "version": APP_VERSION,
@@ -431,6 +464,16 @@ async def system_status(db: AsyncSession = Depends(get_db)):
             "database": db_status,
             "models": orch.num_models_ready() if orch else 0,
             "data_pipeline": bool(loader),
+        },
+        "users": {
+            "total": total_users,
+            "active_30d": active_30d,
+            "validators": validators,
+        },
+        "economy": {
+            "total_staked_vit": float(total_staked_vit),
+            "total_profit": float(total_profit),
+            "platform_volume": float(platform_volume),
         },
     }
 

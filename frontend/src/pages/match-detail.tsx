@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import {
   useGetMatch, useGetConsensusPrediction, useStakeOnPrediction, useGetWallet,
 } from "@/api-client";
+import { AIInsightComparison } from "@/components/AIInsightComparison";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -195,6 +196,8 @@ export default function MatchDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <AIInsightComparison matchId={matchId} />
+
           <Card className="bg-card/50 backdrop-blur border-primary/20 shadow-[0_0_30px_rgba(0,255,255,0.05)]">
             <CardHeader className="border-b border-border/50 pb-4">
               <CardTitle className="font-mono uppercase flex items-center">

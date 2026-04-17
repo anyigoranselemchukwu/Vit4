@@ -75,7 +75,7 @@ export default function DashboardPage() {
 
   const { data: system, isLoading: isLoadingSystem } = useQuery<any>({
     queryKey: ["dashboard-system"],
-    queryFn: () => apiGet<any>("/analytics/system"),
+    queryFn: () => apiGet<any>("/system/status"),
     refetchInterval: 60_000,
   });
 

@@ -20,6 +20,8 @@ import {
   Trophy,
   Vote,
   X,
+  TrendingUp,
+  Layers,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { NotificationBell } from "./notification-bell";
@@ -46,6 +48,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { name: "Bridge",        href: "/bridge",        icon: ArrowLeftRight },
     { name: "Developer",     href: "/developer",     icon: Code2 },
     { name: "Governance",    href: "/governance",    icon: Vote },
+    { name: "Accumulator",   href: "/accumulator",   icon: Layers },
+    { name: "Odds Intel",    href: "/odds",           icon: TrendingUp },
     { name: "Subscription",  href: "/subscription",  icon: CreditCard },
     ...(user?.role === "admin"
       ? [{ name: "Admin Panel", href: "/admin", icon: Lock }]
