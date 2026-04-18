@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+export PATH="$HOME/workspace/.pythonlibs/bin:$PATH"
+
 python - <<'PY'
 import sqlite3
 import subprocess
+import sys
+import os
 from pathlib import Path
 
 db_path = Path("vit.db")
@@ -18,6 +23,9 @@ sentinel_tables = {
     "marketplace_listings",
 }
 
+pythonlibs_alembic = Path(os.path.expanduser("~")) / "workspace" / ".pythonlibs" / "bin" / "alembic"
+alembic_bin = str(pythonlibs_alembic) if pythonlibs_alembic.exists() else "alembic"
+
 if db_path.exists():
     conn = sqlite3.connect(db_path)
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -28,11 +36,11 @@ if db_path.exists():
         version = row[0] if row else None
     conn.close()
     if has_version and version != "22c85e91a8d9" and sentinel_tables.issubset(tables):
-        subprocess.run(["alembic", "stamp", "head"], check=True)
+        subprocess.run([alembic_bin, "stamp", "head"], check=True)
     else:
-        subprocess.run(["alembic", "upgrade", "head"], check=True)
+        subprocess.run([alembic_bin, "upgrade", "head"], check=True)
 else:
-    subprocess.run(["alembic", "upgrade", "head"], check=True)
+    subprocess.run([alembic_bin, "upgrade", "head"], check=True)
 PY
 python -m uvicorn main:app --host 0.0.0.0 --port "${BACKEND_PORT:-8000}" &
 BACKEND_PID=$!
