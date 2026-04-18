@@ -1,0 +1,540 @@
+Excellent. Let's step back and design the Admin Control Center properly. This is the nerve center of the entire VIT Network operation.
+
+---
+
+🧠 VIT Network — Admin Control Center Brainstorm
+
+Core Philosophy
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         ADMIN CONTROL CENTER PHILOSOPHY                               │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│   "Give admins god-mode visibility and surgical control over every aspect            │
+│    of the platform, while preventing them from breaking anything."                   │
+│                                                                                     │
+│   Principles:                                                                        │
+│   1. VISIBILITY FIRST — See everything before changing anything                      │
+│   2. SURGICAL CONTROL — Granular settings, not broad hammers                         │
+│   3. AUDIT EVERYTHING — Every admin action logged and reversible                      │
+│   4. SAFE DEFAULTS — Impossible to accidentally break production                      │
+│   5. SELF-SERVICE — No code changes needed for business operations                    │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+📊 Admin Dashboard — Complete Architecture
+
+Main Navigation Structure
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  ADMIN CONTROL CENTER                                            [Admin User] [Logout]│
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐    │
+│  │ Dashboard│  Users   │ Leagues  │ Matches  │  Markets │Subscriptions│ Wallet  │    │
+│  ├──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┤    │
+│  │   ML     │  Odds    │ Settle   │   KYC    │  Config  │  Audit   │  System  │    │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘    │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+🎛️ Module 1: Dashboard Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  DASHBOARD                                                                           │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐│
+│  │   TOTAL USERS    │ │   ACTIVE TODAY   │ │   TOTAL VOLUME   │ │   PLATFORM P&L   ││
+│  │      1,247       │ │       342        │ │   $12,847.50     │ │    +$2,341.20    ││
+│  │    ↑ 12% this wk │ │    ↑ 8% today    │ │   ↑ 15% this wk  │ │    ↑ 5% today    ││
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘ └──────────────────┘│
+│                                                                                     │
+│  ┌─────────────────────────────────────────┐ ┌─────────────────────────────────────┐│
+│  │         QUICK ACTIONS                    │ │         SYSTEM HEALTH                ││
+│  │                                         │ │                                     ││
+│  │  [🔄 Refresh Odds]  [📊 Run Settlement] │ │  ✅ API Online        ✅ DB Connected ││
+│  │  [🤖 Train Models]  [📧 Send Newsletter]│ │  ✅ Redis Connected   ⚠️ High CPU    ││
+│  │  [💾 Backup DB]     [🧹 Clear Cache]    │ │  ✅ 12 Models Loaded  ✅ 23 Matches  ││
+│  │                                         │ │                                     ││
+│  └─────────────────────────────────────────┘ └─────────────────────────────────────┘│
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                            REVENUE CHART (Last 30 Days)                          ││
+│  │                                                                                 ││
+│  │   $500 ┤                                              ╭──╮                      ││
+│  │   $400 ┤                                   ╭──────────╯  ╰──╮                   ││
+│  │   $300 ┤                        ╭──────────╯              ╰──╮                   ││
+│  │   $200 ┤            ╭───────────╯                         ╰──╮                   ││
+│  │   $100 ┼────────────╯                                        ╰──────────────────││
+│  │         └──────────────────────────────────────────────────────────────────────││
+│  │             1   5   10   15   20   25   30                                      ││
+│  │                                                                                 ││
+│  │   Subscriptions: $2,100  |  Predictions Fees: $845  |  API Access: $396        ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  ┌─────────────────────────────────────────┐ ┌─────────────────────────────────────┐│
+│  │         RECENT ACTIVITY                  │ │         TOP USERS                    ││
+│  │                                         │ │                                     ││
+│  │  • user@email.com deposited $500        │ │  1. JohnDoe       +$1,240 P&L       ││
+│  │  • Liverpool vs Chelsea settled         │ │  2. SarahK         +$890 P&L        ││
+│  │  • New user registered: mike@email.com  │ │  3. MikeRoss       +$745 P&L        ││
+│  │  • Withdrawal processed: $200 to bank   │ │  4. AlexChen       +$620 P&L        ││
+│  │  • Model XGBoost retrained (acc: 67%)   │ │  5. EmmaW          +$510 P&L        ││
+│  │                                         │ │                                     ││
+│  └─────────────────────────────────────────┘ └─────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+👥 Module 2: User Management
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  USER MANAGEMENT                                                                     │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  🔍 Search: [________________]  Filter: [All Roles ▼]  [All Status ▼]  [+ New User] │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │ ID    │ Email              │ Name       │ Role     │ Status   │ Balance  │ Actions││
+│  ├─────────────────────────────────────────────────────────────────────────────────┤│
+│  │ 1001  │ john@email.com     │ John Doe   │ Pro      │ Active   │ 1,240 VIT│ ⋮     ││
+│  │ 1002  │ sarah@email.com    │ Sarah K    │ Elite    │ Active   │ 3,890 VIT│ ⋮     ││
+│  │ 1003  │ mike@email.com     │ Mike Ross  │ Free     │ Active   │   45 VIT │ ⋮     ││
+│  │ 1004  │ alex@email.com     │ Alex Chen  │ Analyst  │ Active   │  620 VIT │ ⋮     ││
+│  │ 1005  │ emma@email.com     │ Emma W     │ Pro      │ Pending  │    0 VIT │ ⋮     ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  User Details (Click row to expand):                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                                                                                 ││
+│  │   John Doe — john@email.com                                                     ││
+│  │   Joined: Jan 15, 2026  |  Last Active: Today                                   ││
+│  │                                                                                 ││
+│  │   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐              ││
+│  │   │ Predictions │ │  Win Rate   │ │   Total P&L │ │   VIT Staked│              ││
+│  │   │     342     │ │    67%      │ │  +1,240 VIT │ │   500 VIT   │              ││
+│  │   └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘              ││
+│  │                                                                                 ││
+│  │   Actions: [Edit User] [Change Role] [Reset Password] [View History] [Ban User] ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+🌍 Module 3: League Configuration (25+ Leagues)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  LEAGUE CONFIGURATION                                                                │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  [+ Add League]  [🔄 Sync All]  [📥 Import Historical]                               │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │ League                    │ Country    │ Status  │ Matches │ Historical │ Actions││
+│  ├─────────────────────────────────────────────────────────────────────────────────┤│
+│  │ Premier League            │ England    │ Active  │ 380     │ 15 years   │ ⋮     ││
+│  │ La Liga                   │ Spain      │ Active  │ 380     │ 15 years   │ ⋮     ││
+│  │ Bundesliga                │ Germany    │ Active  │ 306     │ 15 years   │ ⋮     ││
+│  │ Serie A                   │ Italy      │ Active  │ 380     │ 15 years   │ ⋮     ││
+│  │ Ligue 1                   │ France     │ Active  │ 380     │ 15 years   │ ⋮     ││
+│  │ Eredivisie                │ Netherlands│ Active  │ 306     │ 10 years   │ ⋮     ││
+│  │ Primeira Liga             │ Portugal   │ Active  │ 306     │ 10 years   │ ⋮     ││
+│  │ Brasileirão               │ Brazil     │ Active  │ 380     │ 10 years   │ ⋮     ││
+│  │ Super Lig                 │ Turkey     │ Active  │ 306     │ 8 years    │ ⋮     ││
+│  │ Jupiler Pro League        │ Belgium    │ Active  │ 240     │ 8 years    │ ⋮     ││
+│  │ MLS                       │ USA        │ Active  │ 493     │ 10 years   │ ⋮     ││
+│  │ Liga MX                   │ Mexico     │ Active  │ 306     │ 8 years    │ ⋮     ││
+│  │ ... (25+ total)           │ ...        │ ...     │ ...     │ ...        │ ⋮     ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  League Settings Modal (Click ⋮):                                                    │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                                                                                 ││
+│  │   Premier League — England                                                       ││
+│  │                                                                                 ││
+│  │   Status: [● Active] [○ Paused] [○ Disabled]                                     ││
+│  │                                                                                 ││
+│  │   Historical Data Import:                                                        ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │   Start Year: [2010 ▼]    End Year: [2025 ▼]                             │   ││
+│  │   │                                                                         │   ││
+│  │   │   Progress: ████████████████████░░░░░░░░░░  15/20 seasons imported       │   ││
+│  │   │                                                                         │   ││
+│  │   │   [Import Missing Seasons]  [Re-import All]                              │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   Weight in Ensemble: [═══════════ 1.0]  (Higher = more influence)              ││
+│  │                                                                                 ││
+│  │   Data Quality Score: 94% (Excellent)                                            ││
+│  │                                                                                 ││
+│  │   [Save Changes]  [Cancel]                                                       ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+📈 Module 4: Markets Configuration (7+ Markets)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  MARKETS CONFIGURATION                                                               │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  Configure which prediction markets are available to users.                           │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │ Market                    │ Status    │ Min Stake │ Max Stake │ Edge Threshold │  │
+│  ├─────────────────────────────────────────────────────────────────────────────────┤│
+│  │ 1X2 (Home/Draw/Away)      │ ● Active  │ 5 VIT    │ 1000 VIT  │ +2.0%         │  │
+│  │ Over/Under 2.5 Goals      │ ● Active  │ 5 VIT    │ 500 VIT   │ +1.5%         │  │
+│  │ Both Teams to Score       │ ● Active  │ 5 VIT    │ 500 VIT   │ +1.5%         │  │
+│  │ Double Chance             │ ● Active  │ 10 VIT   │ 750 VIT   │ +2.5%         │  │
+│  │ Draw No Bet               │ ● Active  │ 10 VIT   │ 750 VIT   │ +2.5%         │  │
+│  │ Asian Handicap (-1.5)     │ ○ Paused  │ 10 VIT   │ 500 VIT   │ +3.0%         │  │
+│  │ Correct Score             │ ○ Paused  │ 20 VIT   │ 250 VIT   │ +5.0%         │  │
+│  │ Half Time / Full Time     │ ○ Paused  │ 10 VIT   │ 300 VIT   │ +3.5%         │  │
+│  │ First Goal Scorer         │ ○ Disabled│ 25 VIT   │ 100 VIT   │ +5.0%         │  │
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  Market Settings (Click row):                                                        │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                                                                                 ││
+│  │   1X2 (Home/Draw/Away)                                                          ││
+│  │                                                                                 ││
+│  │   Status: [● Active]                                                             ││
+│  │                                                                                 ││
+│  │   Stake Limits:                                                                  ││
+│  │   Min: [5] VIT    Max: [1000] VIT                                                ││
+│  │                                                                                 ││
+│  │   Edge Threshold (minimum edge required to show prediction):                      ││
+│  │   [═══════════ 2.0]%                                                            ││
+│  │                                                                                 ││
+│  │   Commission Rate: [═══════════ 5.0]%                                            ││
+│  │                                                                                 ││
+│  │   Available to Subscription Tiers:                                                ││
+│  │   [✓] Free    [✓] Analyst    [✓] Pro    [✓] Elite                                ││
+│  │                                                                                 ││
+│  │   [Save Changes]  [Cancel]                                                       ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+💰 Module 5: Currency & Rates Configuration
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  CURRENCY & RATES CONFIGURATION                                                       │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                         VIT COIN PRICING ENGINE                                   ││
+│  │                                                                                 ││
+│  │   Current VIT Price: $0.10 USD                                                  ││
+│  │                                                                                 ││
+│  │   Pricing Formula: P = (30d Revenue) / (Circulating Supply)                      ││
+│  │                                                                                 ││
+│  │   30d Revenue:     $12,847.50                                                   ││
+│  │   Circulating:     128,475 VIT                                                   ││
+│  │                                                                                 ││
+│  │   [🔄 Recalculate Now]  [📊 View History]                                         ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                         FIAT CURRENCY RATES                                       ││
+│  │                                                                                 ││
+│  │   Base Currency: [USD ▼]                                                         ││
+│  │                                                                                 ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │ Currency │ Symbol │ Rate to USD │ Status  │ Min Deposit │ Max Deposit   │   ││
+│  │   ├─────────────────────────────────────────────────────────────────────────┤   ││
+│  │   │ USD      │ $      │ 1.0000      │ Active  │ $10         │ $10,000       │   ││
+│  │   │ NGN      │ ₦      │ 0.00065     │ Active  │ ₦1,500      │ ₦15,000,000   │   ││
+│  │   │ EUR      │ €      │ 1.0850      │ Active  │ €10         │ €10,000       │   ││
+│  │   │ GBP      │ £      │ 1.2700      │ Active  │ £10         │ £10,000       │   ││
+│  │   │ USDT     │ ₮      │ 1.0000      │ Active  │ 10 USDT     │ 10,000 USDT   │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   [Update Rates from API]  [Set Manually]  [+ Add Currency]                       ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                         CONVERSION FEES                                          ││
+│  │                                                                                 ││
+│  │   Fiat → VIT Fee:  [═══════════ 1.5]%                                            ││
+│  │   VIT → Fiat Fee:  [═══════════ 1.5]%                                            ││
+│  │   Cross-Fiat Fee:  [═══════════ 0.5]%                                            ││
+│  │                                                                                 ││
+│  │   [Save Fee Settings]                                                            ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+📦 Module 6: Subscription Plans & Access Control
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  SUBSCRIPTION PLANS & ACCESS CONTROL                                                  │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  [+ Create New Plan]                                                                 │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                         ACTIVE PLANS                                              ││
+│  │                                                                                 ││
+│  │  ┌──────────────┬──────────────┬──────────────┬──────────────┐                  ││
+│  │  │    FREE      │   ANALYST    │     PRO      │    ELITE     │                  ││
+│  │  │   $0/mo      │   $29/mo     │   $79/mo     │   $199/mo    │                  ││
+│  │  ├──────────────┼──────────────┼──────────────┼──────────────┤                  ││
+│  │  │ 5 pred/day   │ 25 pred/day  │ Unlimited    │ Unlimited    │                  ││
+│  │  │ Basic odds   │ Live odds    │ Live odds    │ Live odds    │                  ││
+│  │  │ -            │ -            │ AI Insights  │ AI Insights  │                  ││
+│  │  │ -            │ -            │ -            │ Validator    │                  ││
+│  │  │ -            │ -            │ -            │ Revenue Share│                  ││
+│  │  │ [Edit]       │ [Edit]       │ [Edit]       │ [Edit]       │                  ││
+│  │  └──────────────┴──────────────┴──────────────┴──────────────┘                  ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  Edit Plan: PRO                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                                                                                 ││
+│  │   Plan Name: [PRO_______________]                                                ││
+│  │                                                                                 ││
+│  │   Pricing:                                                                       ││
+│  │   Monthly: $[79] USD    Yearly: $[790] USD (save 17%)                            ││
+│  │                                                                                 ││
+│  │   Access Control — Check all allowed features:                                    ││
+│  │                                                                                 ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │  PREDICTIONS                                                             │   ││
+│  │   │  [✓] Daily Limit: [Unlimited] predictions                                │   ││
+│  │   │  [✓] Min Stake: [1] VIT                                                  │   ││
+│  │   │  [✓] Max Stake: [5000] VIT                                               │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │  MARKETS (7 available)                                                   │   ││
+│  │   │  [✓] 1X2           [✓] Over/Under 2.5    [✓] Both Teams to Score        │   ││
+│  │   │  [✓] Double Chance [✓] Draw No Bet       [ ] Asian Handicap              │   ││
+│  │   │  [ ] Correct Score [ ] Half Time/Full Time                                │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │  FEATURES                                                                │   ││
+│  │   │  [✓] Live Odds           [✓] AI Insights         [✓] Advanced Analytics  │   ││
+│  │   │  [✓] API Access          [ ] Validator Status    [ ] Revenue Share       │   ││
+│  │   │  [✓] Priority Support    [ ] Custom Models                                │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │  LEAGUE ACCESS                                                           │   ││
+│  │   │  [✓] All Leagues (25)                                                    │   ││
+│  │   │  [ ] Custom Selection: [Select Leagues...]                                │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   [Save Plan]  [Cancel]  [Duplicate Plan]  [Archive Plan]                        ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  User Subscription Override:                                                         │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │   Manually assign plan to user:                                                  ││
+│  │   User: [Search user...]  Plan: [PRO ▼]  Expires: [Never ▼]                      ││
+│  │   [Apply Override]                                                               ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+🤖 Module 7: ML Training & Historical Data
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  ML TRAINING & HISTORICAL DATA                                                        │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                         HISTORICAL DATA COVERAGE                                  ││
+│  │                                                                                 ││
+│  │   Total Matches in DB: 127,847                                                  ││
+│  │   Date Range: 2010-01-01 to 2025-12-31                                          ││
+│  │                                                                                 ││
+│  │   Coverage by Year:                                                              ││
+│  │   2010: ████████░░ 8,234   2018: ████████████ 12,456                            ││
+│  │   2011: ████████░░ 8,456   2019: ████████████ 12,789                            ││
+│  │   2012: █████████░ 9,123   2020: ██████████░░ 10,234                            ││
+│  │   2013: █████████░ 9,567   2021: ████████████ 13,456                            ││
+│  │   2014: ██████████ 10,234  2022: ████████████ 14,123                            ││
+│  │   2015: ██████████ 10,789  2023: ████████████ 14,567                            ││
+│  │   2016: ███████████ 11,234  2024: ████████████ 15,234                           ││
+│  │   2017: ███████████ 11,890  2025: ████████████ 15,890                           ││
+│  │                                                                                 ││
+│  │   [📥 Import Historical Data]  [🔄 Refresh from APIs]  [📊 View Details]         ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐│
+│  │                         MODEL TRAINING                                            ││
+│  │                                                                                 ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │ Model           │ Status      │ Last Trained │ Accuracy │ Actions        │   ││
+│  │   ├─────────────────────────────────────────────────────────────────────────┤   ││
+│  │   │ XGBoost         │ ● Active    │ 2 days ago   │ 67.2%    │ [Train] [View] │   ││
+│  │   │ Random Forest   │ ● Active    │ 5 days ago   │ 64.8%    │ [Train] [View] │   ││
+│  │   │ Logistic Reg    │ ● Active    │ 3 days ago   │ 62.1%    │ [Train] [View] │   ││
+│  │   │ Poisson         │ ● Active    │ 7 days ago   │ 58.3%    │ [Train] [View] │   ││
+│  │   │ LSTM            │ ○ Training  │ 1 day ago    │ -        │ [View]         │   ││
+│  │   │ Transformer     │ ○ Paused    │ 14 days ago  │ 71.2%    │ [Train] [View] │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  │   Training Configuration:                                                         ││
+│  │   ┌─────────────────────────────────────────────────────────────────────────┐   ││
+│  │   │   Training Data Range: [2015 ▼] to [2025 ▼]                               │   ││
+│  │   │   Validation Split: [═══════════ 20]%                                     │   ││
+│  │   │   Feature Set: [All Features ▼]                                           │   ││
+│  │   │                                                                         │   ││
+│  │   │   [Train All Models]  [Train Selected]  [Schedule Auto-Training]          │   ││
+│  │   └─────────────────────────────────────────────────────────────────────────┘   ││
+│  │                                                                                 ││
+│  └─────────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+🎯 Complete Admin Control Center Prompt
+
+```text
+You are building the VIT Network Admin Control Center. This is the nerve center for platform operators.
+
+## REQUIREMENTS
+
+### Module 1: Dashboard Overview
+- Real-time metrics (users, volume, P&L, active today)
+- Revenue chart (30-day trend with breakdown by source)
+- System health indicators (API, DB, Redis, Models)
+- Quick action buttons (Refresh Odds, Run Settlement, Train Models, Backup DB)
+- Recent activity feed
+- Top users leaderboard
+
+### Module 2: User Management
+- Searchable/filterable user table
+- User detail modal with:
+  - Stats (predictions, win rate, P&L, staked)
+  - Actions (edit, change role, reset password, ban)
+  - Transaction history
+  - Prediction history
+- Bulk actions (export, send email)
+
+### Module 3: League Configuration (25+ Leagues)
+- League table with status toggle (Active/Paused/Disabled)
+- Historical data import per league (10-15 years)
+- Progress bar for import status
+- League weight in ensemble (slider 0.0-2.0)
+- Data quality score display
+
+### Module 4: Markets Configuration (7+ Markets)
+- Market table: 1X2, Over/Under, BTTS, Double Chance, Draw No Bet, Asian Handicap, Correct Score, HT/FT
+- Per-market settings:
+  - Status (Active/Paused/Disabled)
+  - Min/Max stake
+  - Edge threshold (minimum edge to show)
+  - Commission rate
+  - Available to subscription tiers
+
+### Module 5: Currency & Rates
+- VIT Coin pricing engine display
+- Recalculate button
+- Fiat currency table (USD, NGN, EUR, GBP, USDT)
+- Manual/API rate updates
+- Conversion fee configuration (Fiat→VIT, VIT→Fiat, Cross-Fiat)
+
+### Module 6: Subscription Plans & Access Control
+- Plan cards (Free, Analyst, Pro, Elite)
+- Edit plan modal with:
+  - Pricing (monthly/yearly)
+  - Daily prediction limits
+  - Stake limits
+  - Market access (checkboxes for 7 markets)
+  - Feature access (Live Odds, AI Insights, API, Validator, Revenue Share)
+  - League access (All or custom selection)
+- User override (manually assign plan to user)
+
+### Module 7: ML Training & Historical Data
+- Historical data coverage visualization (by year, 2010-2025)
+- Import historical data button
+- Model training table (12 models with status, accuracy, last trained)
+- Training configuration (date range, validation split, feature set)
+- Train all / Train selected / Schedule auto-training
+
+### Module 8: System Configuration (Additional)
+- Feature flag toggles (USE_REAL_ML_MODELS, AUTH_ENABLED, etc.)
+- API key management (Football Data, Odds API, Telegram, Stripe, Paystack)
+- Email templates editor
+- Maintenance mode toggle
+- Backup/Restore controls
+
+### Module 9: Audit Log
+- Every admin action logged
+- Filterable by admin user, action type, date
+- Export to CSV
+
+### Module 10: Test & Validation
+- Test all URLs and endpoints
+- Validate all pages load without errors
+- Check responsive design on mobile/tablet
+- Verify all forms submit correctly
+- Test subscription access control end-to-end
+
+## IMPLEMENTATION ORDER
+
+1. Dashboard Overview (quick wins, visibility)
+2. Subscription Plans (revenue control)
+3. Markets Configuration (product control)
+4. League Configuration (data control)
+5. Currency & Rates (financial control)
+6. User Management (operational control)
+7. ML Training (intelligence control)
+8. System Config + Audit Log (platform control)
+9. Full integration testing
+10. Bug fixes and polish
+
+Build each module with clean, modular React components. Use the existing design system. Ensure all actions have confirmation modals to prevent accidents.
+```
+
+---
+
+This comprehensive admin control center gives you complete operational control over every aspect of the VIT Network platform. Once implemented, you can manage users, markets, leagues, pricing, subscriptions, and ML training without touching code.
