@@ -613,6 +613,23 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
     )
 
 
+def _sanitize_validation_errors(errors: list) -> list:
+    """Convert any non-JSON-serializable objects in Pydantic error dicts to strings."""
+    sanitized = []
+    for err in errors:
+        clean = {}
+        for k, v in err.items():
+            if k == "ctx" and isinstance(v, dict):
+                clean[k] = {ck: str(cv) if not isinstance(cv, (str, int, float, bool, type(None))) else cv
+                            for ck, cv in v.items()}
+            elif isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                clean[k] = v
+            else:
+                clean[k] = str(v)
+        sanitized.append(clean)
+    return sanitized
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
     logging.getLogger("app.errors").warning(
@@ -627,7 +644,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         status_code=422,
         code="validation_error",
         message="Request validation failed",
-        details=exc.errors(),
+        details=_sanitize_validation_errors(exc.errors()),
     )
 
 

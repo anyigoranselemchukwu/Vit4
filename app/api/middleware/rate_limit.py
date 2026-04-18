@@ -2,11 +2,16 @@
 # VIT Sports Intelligence — Rate Limiting Middleware
 # In-memory sliding window rate limiter (per IP + per API key)
 
+import os
 import time
 from collections import defaultdict, deque
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.errors import error_response
+
+
+def _rate_limiting_enabled() -> bool:
+    return os.getenv("RATE_LIMIT_ENABLED", "true").lower() != "false"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -29,6 +34,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     _BYPASS = ("/health", "/docs", "/openapi.json", "/redoc", "/static")
 
     async def dispatch(self, request: Request, call_next):
+        if not _rate_limiting_enabled():
+            return await call_next(request)
+
         path = request.url.path
 
         if any(path.startswith(b) for b in self._BYPASS):

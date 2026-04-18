@@ -27,9 +27,24 @@ import logging
 import math
 import os
 import random
+import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Feature flags — import lazily to avoid circular imports at module load time
+def _use_real_ml_models() -> bool:
+    try:
+        _root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from app.core.feature_flags import FeatureFlags
+        return FeatureFlags.is_enabled("USE_REAL_ML_MODELS")
+    except Exception:
+        return os.getenv("USE_REAL_ML_MODELS", "false").lower() == "true"
+
+def _ml_cache_enabled() -> bool:
+    return os.getenv("ML_MODEL_CACHE_ENABLED", "true").lower() == "true"
 
 _TOTAL_MODEL_SPECS    = 12
 _HOME_ADVANTAGE_BIAS  = 0.045
@@ -595,6 +610,14 @@ class ModelOrchestrator:
     # ── Model loading ──────────────────────────────────────────────────────────
 
     def load_all_models(self) -> Dict[str, bool]:
+        use_real = _use_real_ml_models()
+        cache_on = _ml_cache_enabled()
+
+        if use_real:
+            logger.info("🤖 USE_REAL_ML_MODELS=true — attempting to load trained .pkl weights")
+        else:
+            logger.info("🔢 USE_REAL_ML_MODELS=false — using algorithmic ensemble (no .pkl loading)")
+
         models_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "..", "..", "..", "models",
@@ -602,35 +625,17 @@ class ModelOrchestrator:
         results: Dict[str, bool] = {}
 
         for key, name, markets, sigma, market_trust in _MODEL_SPECS:
-            pkl_path = os.path.join(models_dir, f"{key}.pkl")
-
-            # Always create the proper algorithmic model class first
+            # Always create the proper algorithmic model class first (noise-based fallback)
             cls = _MODEL_CLASS_MAP.get(key, _BaseModel)
             model_obj = cls(key, markets, sigma, market_trust)
 
-            # If a trained pkl exists, attach the sklearn model to the instance
+            # Only attempt pkl loading when USE_REAL_ML_MODELS is enabled
             loaded = False
-            if os.path.exists(pkl_path):
-                try:
-                    import joblib
-                    payload = joblib.load(pkl_path)
-                    if isinstance(payload, dict) and "model" in payload:
-                        model_obj._sklearn_model    = payload["model"]
-                        model_obj._sklearn_scaler   = payload.get("scaler")
-                        model_obj._sklearn_features = payload.get("feature_columns", [])
-                        model_obj._sklearn_version  = payload.get("version", "?")
-                        model_obj.is_trained        = True
-                        model_obj.trained_matches_count = payload.get("training_samples", 1)
-                        loaded = True
-                        logger.info(
-                            f"✅ Loaded real weights for {key} "
-                            f"(acc={payload.get('metrics',{}).get('accuracy','?')}, "
-                            f"samples={payload.get('training_samples','?')})"
-                        )
-                    else:
-                        logger.warning(f"Unexpected pkl format for {key} — using algorithmic model")
-                except Exception as exc:
-                    logger.warning(f"Failed to load {key}.pkl: {exc}")
+            if use_real:
+                payload = self._try_load_pkl(key, models_dir, cache_on)
+                if payload is not None:
+                    self._attach_sklearn_payload(model_obj, key, payload)
+                    loaded = True
 
             self._pkl_loaded[key] = loaded
             # Real-weights models get 2× vote weight in the ensemble
@@ -654,6 +659,47 @@ class ModelOrchestrator:
             f"({n_pkl} with real trained weights)"
         )
         return results
+
+    def _try_load_pkl(self, key: str, legacy_models_dir: str, cache_on: bool) -> Optional[Dict]:
+        """
+        Try loading a trained pkl for *key* from two locations in order:
+        1. backend/models/trained/<key>.pkl  (new ModelLoader path)
+        2. models/<key>.pkl                  (legacy project-root path)
+        Returns the payload dict or None.
+        """
+        try:
+            from services.ml_service.model_loader import load_model
+            payload = load_model(key, cache_enabled=cache_on)
+            if payload is not None:
+                return payload
+        except Exception as exc:
+            logger.debug(f"ModelLoader unavailable for {key}: {exc}")
+
+        legacy_path = os.path.join(legacy_models_dir, f"{key}.pkl")
+        if os.path.exists(legacy_path):
+            try:
+                import joblib
+                payload = joblib.load(legacy_path)
+                if isinstance(payload, dict) and "model" in payload:
+                    return payload
+                logger.warning(f"Unexpected pkl format at legacy path for {key}")
+            except Exception as exc:
+                logger.warning(f"Failed to load legacy {key}.pkl: {exc}")
+        return None
+
+    def _attach_sklearn_payload(self, model_obj, key: str, payload: Dict) -> None:
+        """Attach a loaded sklearn payload to a model instance."""
+        model_obj._sklearn_model        = payload["model"]
+        model_obj._sklearn_scaler       = payload.get("scaler")
+        model_obj._sklearn_features     = payload.get("feature_columns", [])
+        model_obj._sklearn_version      = payload.get("version", "?")
+        model_obj.is_trained            = True
+        model_obj.trained_matches_count = payload.get("training_samples", 1)
+        logger.info(
+            f"✅ Attached real weights for {key} "
+            f"(acc={payload.get('metrics', {}).get('accuracy', '?')}, "
+            f"samples={payload.get('training_samples', '?')})"
+        )
 
     def _sklearn_predict(self, model_obj, lam_h: float, lam_a: float,
                          base_hp: float, base_dp: float, base_ap: float
