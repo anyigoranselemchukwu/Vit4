@@ -3,9 +3,14 @@ export interface User {
   username: string;
   email: string;
   role: string;
+  admin_role?: string | null;
   subscription_tier: string;
+  is_banned?: boolean;
   is_active: boolean;
+  is_verified?: boolean;
   created_at: string;
+  last_login?: string | null;
+  permissions?: string[];
 }
 
 export interface Match {

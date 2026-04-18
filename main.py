@@ -312,11 +312,19 @@ async def lifespan(app: FastAPI):
                         username=_admin_user,
                         hashed_password=hash_password(_admin_pass),
                         role="admin",
+                        admin_role="super_admin",
+                        subscription_tier="elite",
                         is_active=True,
                     ))
                     await _db.commit()
                     print(f"✅ Default admin created: {_admin_email}")
             else:
+                # Ensure existing admin has admin_role and subscription_tier set
+                if not _exists.admin_role:
+                    _exists.admin_role = "super_admin"
+                if not _exists.subscription_tier:
+                    _exists.subscription_tier = "elite"
+                await _db.commit()
                 print(f"✅ Admin account found: {_admin_email}")
     except Exception as _e:
         print(f"⚠️  Admin seeding failed: {_e}")

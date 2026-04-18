@@ -1,4 +1,4 @@
-# VIT Sports Intelligence Network v4.2.0 — Phase F UX
+# VIT Sports Intelligence Network v4.3.0 — RBAC Admin Control Center
 
 ## Overview
 A full-stack sports prediction platform combining a 12-model ML ensemble with AI insights, blockchain economy, wallet system, marketplace, governance, and complete module coverage across all 11 phases of the build roadmap.
@@ -28,6 +28,14 @@ bash scripts/start_fullstack.sh
 - ✅ Phase 7: AI Marketplace (`app/modules/marketplace/`)
 - ✅ Phase 8: Trust & Anti-Fraud (`app/modules/trust/`)
 - ✅ Phase 9: Cross-Chain Bridge (`app/modules/bridge/`)
+- ✅ Phase 10: RBAC Admin Control Center (v4.3.0)
+  - Backend: `app/core/roles.py` (AdminRole, SubscriptionTier, Permission, ROLE_PERMISSIONS matrix)
+  - Backend: `app/core/permissions.py` (require_permission, require_admin_roles, require_subscription)
+  - Backend: 11 new admin endpoint groups in `app/api/routes/admin.py` (stats, health, users CRUD+ban, leagues×25, markets×9, currency+VIT recalc, subscriptions, feature flags, cache/backup, audit)
+  - Frontend: `app/lib/auth.tsx` (AuthProvider with hasPermission/hasAdminRole/hasTier helpers)
+  - Frontend: `components/auth/ProtectedRoute.tsx`, `PermissionGate.tsx`, `TierGate`
+  - Frontend: `pages/admin.tsx` — 8-tab control center (Dashboard, Users, Leagues, Markets, Currency, Subscriptions, System, Audit)
+  - Database: Alembic migration 739d5e62d691 adds admin_role, subscription_tier, is_banned to users
 - ✅ Phase 10: Developer Platform (`app/modules/developer/`)
 - ✅ Phase 11: Governance (`app/modules/governance/`)
 - ✅ Module D: AI Training Guide (`app/modules/training/`)

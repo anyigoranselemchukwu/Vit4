@@ -29,3 +29,4 @@ starlette
 stripe==11.4.0
 tenacity==9.0.0
 uvicorn[standard]==0.34.0
+psutil

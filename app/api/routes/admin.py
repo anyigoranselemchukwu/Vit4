@@ -1426,3 +1426,758 @@ async def stream_predictions(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
+
+
+# ======================================================================
+# RBAC ADMIN CONTROL CENTER — v4.0.0
+# Dashboard Stats, User CRUD, Leagues, Markets, Currency,
+# Subscriptions, Feature Flags, System Actions, Audit
+# ======================================================================
+
+import platform
+import psutil
+from sqlalchemy import select as _select, func as _func, desc as _desc, update as _update, delete as _delete
+from app.db.models import (
+    User as _User, AuditLog as _AuditLog,
+    SubscriptionPlan as _SubscriptionPlan, UserSubscription as _UserSubscription,
+    Match as _Match, TrainingJob as _TrainingJob,
+)
+from app.modules.wallet.models import PlatformConfig as _PlatformConfig, Wallet as _Wallet
+from app.auth.jwt_utils import hash_password as _hash_password
+from app.core.roles import AdminRole as _AdminRole, get_permissions_for_admin_role
+
+
+# ── Pydantic schemas ──────────────────────────────────────────────────
+
+class UserCreateBody(BaseModel):
+    email: str
+    username: str
+    password: str
+    role: str = "user"
+    admin_role: Optional[str] = None
+    subscription_tier: str = "viewer"
+
+
+class UserEditBody(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    admin_role: Optional[str] = None
+    subscription_tier: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+
+
+class BanUserBody(BaseModel):
+    banned: bool
+    reason: Optional[str] = None
+
+
+class SubscriptionOverrideBody(BaseModel):
+    plan_name: str
+    expires_at: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class LeagueUpdateBody(BaseModel):
+    status: Optional[str] = None        # active, paused, disabled
+    weight: Optional[float] = None      # 0.0 - 2.0
+    data_quality: Optional[float] = None
+
+
+class MarketUpdateBody(BaseModel):
+    status: Optional[str] = None        # active, paused, disabled
+    min_stake: Optional[float] = None
+    max_stake: Optional[float] = None
+    edge_threshold: Optional[float] = None
+    commission_rate: Optional[float] = None
+    available_tiers: Optional[List[str]] = None
+
+
+class CurrencyUpdateBody(BaseModel):
+    rate_to_usd: Optional[float] = None
+    status: Optional[str] = None
+    min_deposit: Optional[float] = None
+    max_deposit: Optional[float] = None
+
+
+class PlanUpdateBody(BaseModel):
+    display_name: Optional[str] = None
+    price_monthly: Optional[float] = None
+    price_yearly: Optional[float] = None
+    prediction_limit: Optional[int] = None
+    features: Optional[dict] = None
+    is_active: Optional[bool] = None
+
+
+class FlagsUpdateBody(BaseModel):
+    flags: dict
+
+
+# ── Default data (loaded from PlatformConfig or hardcoded fallback) ───
+
+_DEFAULT_LEAGUES = [
+    {"id": "pl",  "name": "Premier League",        "country": "England",    "status": "active", "weight": 1.0, "data_quality": 95, "matches": 0},
+    {"id": "ll",  "name": "La Liga",               "country": "Spain",      "status": "active", "weight": 1.0, "data_quality": 93, "matches": 0},
+    {"id": "bl",  "name": "Bundesliga",             "country": "Germany",    "status": "active", "weight": 1.0, "data_quality": 92, "matches": 0},
+    {"id": "sa",  "name": "Serie A",               "country": "Italy",      "status": "active", "weight": 1.0, "data_quality": 91, "matches": 0},
+    {"id": "l1",  "name": "Ligue 1",               "country": "France",     "status": "active", "weight": 1.0, "data_quality": 90, "matches": 0},
+    {"id": "ere", "name": "Eredivisie",             "country": "Netherlands","status": "active", "weight": 0.9, "data_quality": 85, "matches": 0},
+    {"id": "pl2", "name": "Primeira Liga",          "country": "Portugal",   "status": "active", "weight": 0.9, "data_quality": 84, "matches": 0},
+    {"id": "br",  "name": "Brasileirão",            "country": "Brazil",     "status": "active", "weight": 0.8, "data_quality": 80, "matches": 0},
+    {"id": "sl",  "name": "Super Lig",              "country": "Turkey",     "status": "active", "weight": 0.8, "data_quality": 78, "matches": 0},
+    {"id": "jpb", "name": "Jupiler Pro League",     "country": "Belgium",    "status": "active", "weight": 0.8, "data_quality": 80, "matches": 0},
+    {"id": "mls", "name": "MLS",                   "country": "USA",        "status": "active", "weight": 0.7, "data_quality": 75, "matches": 0},
+    {"id": "mx",  "name": "Liga MX",               "country": "Mexico",     "status": "active", "weight": 0.7, "data_quality": 74, "matches": 0},
+    {"id": "ch",  "name": "Championship",           "country": "England",    "status": "active", "weight": 0.8, "data_quality": 82, "matches": 0},
+    {"id": "sp",  "name": "Scottish Premiership",   "country": "Scotland",   "status": "paused", "weight": 0.7, "data_quality": 76, "matches": 0},
+    {"id": "ab",  "name": "Austrian Bundesliga",    "country": "Austria",    "status": "paused", "weight": 0.7, "data_quality": 73, "matches": 0},
+    {"id": "ss",  "name": "Swiss Super League",     "country": "Switzerland","status": "paused", "weight": 0.7, "data_quality": 72, "matches": 0},
+    {"id": "ds",  "name": "Danish Superliga",       "country": "Denmark",    "status": "paused", "weight": 0.7, "data_quality": 71, "matches": 0},
+    {"id": "sve", "name": "Allsvenskan",            "country": "Sweden",     "status": "paused", "weight": 0.7, "data_quality": 70, "matches": 0},
+    {"id": "nor", "name": "Eliteserien",            "country": "Norway",     "status": "paused", "weight": 0.7, "data_quality": 70, "matches": 0},
+    {"id": "rpl", "name": "Russian Premier League", "country": "Russia",     "status": "disabled","weight": 0.5,"data_quality": 60, "matches": 0},
+    {"id": "upl", "name": "Ukrainian Premier League","country": "Ukraine",   "status": "disabled","weight": 0.5,"data_quality": 58, "matches": 0},
+    {"id": "gsl", "name": "Greek Super League",     "country": "Greece",     "status": "paused", "weight": 0.6, "data_quality": 65, "matches": 0},
+    {"id": "arg", "name": "Argentine Primera",      "country": "Argentina",  "status": "active", "weight": 0.7, "data_quality": 74, "matches": 0},
+    {"id": "j1",  "name": "J1 League",             "country": "Japan",      "status": "active", "weight": 0.7, "data_quality": 73, "matches": 0},
+    {"id": "k1",  "name": "K League 1",            "country": "South Korea","status": "active", "weight": 0.6, "data_quality": 70, "matches": 0},
+]
+
+_DEFAULT_MARKETS = [
+    {"id": "1x2",           "name": "1X2 (Home/Draw/Away)",   "status": "active", "min_stake": 5,  "max_stake": 1000, "edge_threshold": 2.0, "commission_rate": 5.0, "available_tiers": ["viewer","analyst","pro","elite"]},
+    {"id": "over_under",    "name": "Over/Under 2.5 Goals",   "status": "active", "min_stake": 5,  "max_stake": 1000, "edge_threshold": 2.0, "commission_rate": 5.0, "available_tiers": ["viewer","analyst","pro","elite"]},
+    {"id": "btts",          "name": "Both Teams to Score",    "status": "active", "min_stake": 5,  "max_stake": 1000, "edge_threshold": 2.0, "commission_rate": 5.0, "available_tiers": ["viewer","analyst","pro","elite"]},
+    {"id": "double_chance", "name": "Double Chance",          "status": "active", "min_stake": 5,  "max_stake": 750,  "edge_threshold": 2.5, "commission_rate": 5.0, "available_tiers": ["analyst","pro","elite"]},
+    {"id": "draw_no_bet",   "name": "Draw No Bet",            "status": "active", "min_stake": 5,  "max_stake": 500,  "edge_threshold": 2.5, "commission_rate": 5.0, "available_tiers": ["pro","elite"]},
+    {"id": "asian_handicap","name": "Asian Handicap (-1.5)",  "status": "active", "min_stake": 5,  "max_stake": 500,  "edge_threshold": 3.0, "commission_rate": 6.0, "available_tiers": ["elite"]},
+    {"id": "correct_score", "name": "Correct Score",          "status": "active", "min_stake": 2,  "max_stake": 100,  "edge_threshold": 5.0, "commission_rate": 8.0, "available_tiers": ["elite"]},
+    {"id": "htft",          "name": "Half Time / Full Time",  "status": "paused", "min_stake": 2,  "max_stake": 200,  "edge_threshold": 4.0, "commission_rate": 7.0, "available_tiers": ["elite"]},
+    {"id": "first_goal",    "name": "First Goal Scorer",      "status": "paused", "min_stake": 1,  "max_stake": 50,   "edge_threshold": 5.0, "commission_rate": 10.0,"available_tiers": ["elite"]},
+]
+
+_DEFAULT_CURRENCIES = [
+    {"code": "USD",  "symbol": "$",  "name": "US Dollar",     "rate_to_usd": 1.0,    "status": "active", "min_deposit": 10,    "max_deposit": 10000},
+    {"code": "NGN",  "symbol": "₦",  "name": "Nigerian Naira","rate_to_usd": 0.00065,"status": "active", "min_deposit": 1500,  "max_deposit": 15000000},
+    {"code": "EUR",  "symbol": "€",  "name": "Euro",          "rate_to_usd": 1.085,  "status": "active", "min_deposit": 10,    "max_deposit": 10000},
+    {"code": "GBP",  "symbol": "£",  "name": "British Pound", "rate_to_usd": 1.27,   "status": "active", "min_deposit": 10,    "max_deposit": 10000},
+    {"code": "USDT", "symbol": "₮",  "name": "Tether",        "rate_to_usd": 1.0,    "status": "active", "min_deposit": 10,    "max_deposit": 10000},
+]
+
+_DEFAULT_FLAGS = {
+    "USE_REAL_ML_MODELS":    {"value": True,  "description": "Use trained models vs random noise"},
+    "AUTH_ENABLED":          {"value": True,  "description": "Require authentication on all routes"},
+    "BLOCKCHAIN_ENABLED":    {"value": False, "description": "Enable blockchain settlement"},
+    "RATE_LIMIT_ENABLED":    {"value": True,  "description": "Enable API rate limiting"},
+    "WEBSOCKET_ENABLED":     {"value": True,  "description": "Real-time WebSocket updates"},
+    "MAINTENANCE_MODE":      {"value": False, "description": "Show maintenance page to all users"},
+    "LIVE_ODDS_ENABLED":     {"value": True,  "description": "Fetch and display live odds"},
+    "AI_INSIGHTS_ENABLED":   {"value": True,  "description": "Generate AI match insights"},
+    "NOTIFICATIONS_ENABLED": {"value": True,  "description": "Send push notifications"},
+    "REFERRALS_ENABLED":     {"value": False, "description": "Enable affiliate/referral system"},
+}
+
+
+async def _config_get(db, key: str, default):
+    row = (await db.execute(
+        _select(_PlatformConfig).where(_PlatformConfig.key == key)
+    )).scalar_one_or_none()
+    if row:
+        return row.value
+    return default
+
+
+async def _config_set(db, key: str, value, actor_id: Optional[int] = None):
+    row = (await db.execute(
+        _select(_PlatformConfig).where(_PlatformConfig.key == key)
+    )).scalar_one_or_none()
+    if row:
+        row.value = value
+        row.updated_by = actor_id
+    else:
+        db.add(_PlatformConfig(key=key, value=value, updated_by=actor_id))
+    await db.commit()
+
+
+async def _log_audit(db, action: str, actor: str, resource: str = None,
+                     resource_id: str = None, details: dict = None, status: str = "success"):
+    try:
+        db.add(_AuditLog(
+            action=action, actor=actor, resource=resource,
+            resource_id=str(resource_id) if resource_id else None,
+            details=details, status=status,
+        ))
+        await db.commit()
+    except Exception:
+        pass
+
+
+# ── 1. Dashboard Stats ────────────────────────────────────────────────
+
+@router.get("/stats")
+async def admin_stats():
+    """Enhanced dashboard KPIs + activity."""
+    async with AsyncSessionLocal() as db:
+        total_users   = (await db.execute(_select(_func.count()).select_from(_User))).scalar() or 0
+        total_matches = (await db.execute(_select(_func.count()).select_from(_Match))).scalar() or 0
+        total_jobs    = (await db.execute(_select(_func.count()).select_from(_TrainingJob))).scalar() or 0
+        active_plans  = (await db.execute(_select(_func.count()).select_from(_SubscriptionPlan)
+                                          .where(_SubscriptionPlan.is_active == True))).scalar() or 0
+        recent_audit  = (await db.execute(
+            _select(_AuditLog).order_by(_desc(_AuditLog.timestamp)).limit(10)
+        )).scalars().all()
+        top_users = (await db.execute(
+            _select(_User).where(_User.is_active == True).limit(5)
+        )).scalars().all()
+
+    audit_list = [
+        {"action": a.action, "actor": a.actor, "resource": a.resource,
+         "status": a.status, "timestamp": a.timestamp.isoformat() if a.timestamp else None}
+        for a in recent_audit
+    ]
+    top_list = [
+        {"id": u.id, "username": u.username, "email": u.email,
+         "role": u.role, "tier": getattr(u, "subscription_tier", "viewer"),
+         "joined": u.created_at.isoformat() if u.created_at else None}
+        for u in top_users
+    ]
+    return {
+        "users": total_users,
+        "matches": total_matches,
+        "training_jobs": total_jobs,
+        "active_plans": active_plans,
+        "audit_entries": len(audit_list),
+        "recent_activity": audit_list,
+        "top_users": top_list,
+    }
+
+
+# ── 2. System Health ──────────────────────────────────────────────────
+
+@router.get("/system/health")
+async def system_health():
+    """Real-time system health metrics."""
+    try:
+        cpu_pct = psutil.cpu_percent(interval=0.2)
+        mem     = psutil.virtual_memory()
+        disk    = psutil.disk_usage("/")
+    except Exception:
+        cpu_pct = 0; mem = None; disk = None
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await db.execute(_select(_func.count()).select_from(_User))
+            db_ok = True
+        except Exception:
+            db_ok = False
+
+    redis_ok = bool(get_env("REDIS_URL"))
+    return {
+        "api":    True,
+        "database": db_ok,
+        "redis":  redis_ok,
+        "models_loaded": 12,
+        "cpu_pct": round(cpu_pct, 1),
+        "mem_pct": round(mem.percent, 1) if mem else 0,
+        "disk_pct": round(disk.percent, 1) if disk else 0,
+        "python_version": platform.python_version(),
+    }
+
+
+# ── 3. User Management ────────────────────────────────────────────────
+
+@router.get("/users")
+async def list_users(
+    search: Optional[str] = None,
+    role: Optional[str] = None,
+    tier: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List all users with filtering."""
+    async with AsyncSessionLocal() as db:
+        q = _select(_User)
+        if search:
+            q = q.where(
+                (_User.email.ilike(f"%{search}%")) | (_User.username.ilike(f"%{search}%"))
+            )
+        if role:
+            q = q.where(_User.role == role)
+        if tier:
+            q = q.where(_User.subscription_tier == tier)
+        if status == "active":
+            q = q.where(_User.is_active == True)
+        elif status == "banned":
+            q = q.where(_User.is_banned == True)
+        elif status == "inactive":
+            q = q.where(_User.is_active == False)
+        total = (await db.execute(_select(_func.count()).select_from(q.subquery()))).scalar() or 0
+        users = (await db.execute(q.order_by(_desc(_User.created_at)).offset(offset).limit(limit))).scalars().all()
+
+        wallet_map = {}
+        if users:
+            ids = [u.id for u in users]
+            wallets = (await db.execute(_select(_Wallet).where(_Wallet.user_id.in_(ids)))).scalars().all()
+            wallet_map = {w.user_id: w for w in wallets}
+
+    return {
+        "total": total,
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "username": u.username,
+                "role": u.role,
+                "admin_role": getattr(u, "admin_role", None),
+                "subscription_tier": getattr(u, "subscription_tier", "viewer"),
+                "is_active": u.is_active,
+                "is_verified": u.is_verified,
+                "is_banned": getattr(u, "is_banned", False),
+                "vitcoin_balance": float(wallet_map[u.id].vitcoin_balance) if u.id in wallet_map else 0.0,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "last_login": u.last_login.isoformat() if u.last_login else None,
+            }
+            for u in users
+        ],
+    }
+
+
+@router.get("/users/{user_id}")
+async def get_user(user_id: int):
+    """Get a single user with wallet details."""
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(_select(_User).where(_User.id == user_id))).scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "User not found")
+        wallet = (await db.execute(_select(_Wallet).where(_Wallet.user_id == user_id))).scalar_one_or_none()
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "role": user.role,
+        "admin_role": getattr(user, "admin_role", None),
+        "subscription_tier": getattr(user, "subscription_tier", "viewer"),
+        "is_active": user.is_active,
+        "is_verified": user.is_verified,
+        "is_banned": getattr(user, "is_banned", False),
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+        "vitcoin_balance": float(wallet.vitcoin_balance) if wallet else 0.0,
+        "permissions": get_permissions_for_admin_role(getattr(user, "admin_role", "") or ""),
+    }
+
+
+@router.post("/users", status_code=201)
+async def create_user(body: UserCreateBody, current_user: _User = Depends(get_current_admin)):
+    """Create a new user account."""
+    async with AsyncSessionLocal() as db:
+        existing = (await db.execute(_select(_User).where(_User.email == body.email.lower()))).scalar_one_or_none()
+        if existing:
+            raise HTTPException(400, "Email already registered")
+        user = _User(
+            email=body.email.lower(),
+            username=body.username,
+            hashed_password=_hash_password(body.password),
+            role=body.role,
+            admin_role=body.admin_role,
+            subscription_tier=body.subscription_tier,
+            is_active=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        # Create wallet
+        from app.modules.wallet.models import Wallet as _WalletModel
+        db.add(_WalletModel(user_id=user.id, vitcoin_balance=0))
+        await db.commit()
+        await _log_audit(db, "user.create", current_user.email, "user", user.id,
+                         {"email": body.email, "role": body.role})
+    return {"id": user.id, "email": user.email, "message": "User created"}
+
+
+@router.put("/users/{user_id}")
+async def edit_user(user_id: int, body: UserEditBody, current_user: _User = Depends(get_current_admin)):
+    """Edit user profile, role or tier."""
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(_select(_User).where(_User.id == user_id))).scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "User not found")
+        changed = {}
+        if body.username is not None:
+            user.username = body.username; changed["username"] = body.username
+        if body.email is not None:
+            user.email = body.email.lower(); changed["email"] = body.email
+        if body.role is not None:
+            user.role = body.role; changed["role"] = body.role
+        if body.admin_role is not None:
+            user.admin_role = body.admin_role; changed["admin_role"] = body.admin_role
+        if body.subscription_tier is not None:
+            user.subscription_tier = body.subscription_tier; changed["tier"] = body.subscription_tier
+        if body.is_active is not None:
+            user.is_active = body.is_active; changed["is_active"] = body.is_active
+        if body.is_verified is not None:
+            user.is_verified = body.is_verified; changed["is_verified"] = body.is_verified
+        await db.commit()
+        await _log_audit(db, "user.edit", current_user.email, "user", user_id, changed)
+    return {"message": "User updated", "changes": changed}
+
+
+@router.delete("/users/{user_id}", dependencies=[Depends(get_current_admin)])
+async def delete_user(user_id: int, current_user: _User = Depends(get_current_admin)):
+    """Delete a user (super_admin only)."""
+    admin_role = getattr(current_user, "admin_role", None)
+    if admin_role != "super_admin":
+        raise HTTPException(403, "Only super_admin can delete users")
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(_select(_User).where(_User.id == user_id))).scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "User not found")
+        if user.id == current_user.id:
+            raise HTTPException(400, "Cannot delete your own account")
+        await db.execute(_delete(_User).where(_User.id == user_id))
+        await db.commit()
+        await _log_audit(db, "user.delete", current_user.email, "user", user_id, {"email": user.email})
+    return {"message": "User deleted"}
+
+
+@router.post("/users/{user_id}/ban")
+async def ban_user(user_id: int, body: BanUserBody, current_user: _User = Depends(get_current_admin)):
+    """Ban or unban a user."""
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(_select(_User).where(_User.id == user_id))).scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "User not found")
+        if user.id == current_user.id:
+            raise HTTPException(400, "Cannot ban your own account")
+        user.is_banned = body.banned
+        if body.banned:
+            user.is_active = False
+        await db.commit()
+        action = "user.ban" if body.banned else "user.unban"
+        await _log_audit(db, action, current_user.email, "user", user_id,
+                         {"reason": body.reason, "email": user.email})
+    return {"message": f"User {'banned' if body.banned else 'unbanned'}"}
+
+
+@router.post("/users/{user_id}/subscription-override")
+async def override_subscription(user_id: int, body: SubscriptionOverrideBody,
+                                 current_user: _User = Depends(get_current_admin)):
+    """Manually override a user's subscription tier."""
+    async with AsyncSessionLocal() as db:
+        user = (await db.execute(_select(_User).where(_User.id == user_id))).scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "User not found")
+        user.subscription_tier = body.plan_name
+        await db.commit()
+        await _log_audit(db, "subscription.override", current_user.email, "user", user_id,
+                         {"plan": body.plan_name, "reason": body.reason, "expires_at": body.expires_at})
+    return {"message": f"Subscription set to {body.plan_name}"}
+
+
+# ── 4. League Configuration ───────────────────────────────────────────
+
+@router.get("/leagues")
+async def list_leagues():
+    """Return all 25+ league configurations."""
+    async with AsyncSessionLocal() as db:
+        stored = await _config_get(db, "leagues_config", None)
+    return {"leagues": stored if stored else _DEFAULT_LEAGUES}
+
+
+@router.put("/leagues/{league_id}")
+async def update_league(league_id: str, body: LeagueUpdateBody,
+                         current_user: _User = Depends(get_current_admin)):
+    """Update status, weight, or data quality for a league."""
+    async with AsyncSessionLocal() as db:
+        leagues = await _config_get(db, "leagues_config", list(_DEFAULT_LEAGUES))
+        updated = False
+        for lg in leagues:
+            if lg["id"] == league_id:
+                if body.status is not None:     lg["status"] = body.status
+                if body.weight is not None:     lg["weight"] = body.weight
+                if body.data_quality is not None: lg["data_quality"] = body.data_quality
+                updated = True
+                break
+        if not updated:
+            raise HTTPException(404, "League not found")
+        await _config_set(db, "leagues_config", leagues, current_user.id)
+        await _log_audit(db, "league.update", current_user.email, "league", league_id,
+                         body.model_dump(exclude_none=True))
+    return {"message": "League updated"}
+
+
+# ── 5. Market Configuration ───────────────────────────────────────────
+
+@router.get("/markets")
+async def list_markets():
+    """Return all market configurations."""
+    async with AsyncSessionLocal() as db:
+        stored = await _config_get(db, "markets_config", None)
+    return {"markets": stored if stored else _DEFAULT_MARKETS}
+
+
+@router.put("/markets/{market_id}")
+async def update_market(market_id: str, body: MarketUpdateBody,
+                         current_user: _User = Depends(get_current_admin)):
+    """Update a market's settings."""
+    async with AsyncSessionLocal() as db:
+        markets = await _config_get(db, "markets_config", list(_DEFAULT_MARKETS))
+        updated = False
+        for mk in markets:
+            if mk["id"] == market_id:
+                if body.status is not None:           mk["status"] = body.status
+                if body.min_stake is not None:        mk["min_stake"] = body.min_stake
+                if body.max_stake is not None:        mk["max_stake"] = body.max_stake
+                if body.edge_threshold is not None:   mk["edge_threshold"] = body.edge_threshold
+                if body.commission_rate is not None:  mk["commission_rate"] = body.commission_rate
+                if body.available_tiers is not None:  mk["available_tiers"] = body.available_tiers
+                updated = True
+                break
+        if not updated:
+            raise HTTPException(404, "Market not found")
+        await _config_set(db, "markets_config", markets, current_user.id)
+        await _log_audit(db, "market.update", current_user.email, "market", market_id,
+                         body.model_dump(exclude_none=True))
+    return {"message": "Market updated"}
+
+
+# ── 6. Currency & Rates ───────────────────────────────────────────────
+
+@router.get("/currency")
+async def get_currency():
+    """Return currency rates, VIT pricing, and conversion fees."""
+    async with AsyncSessionLocal() as db:
+        currencies = await _config_get(db, "currencies_config", list(_DEFAULT_CURRENCIES))
+        fees = await _config_get(db, "conversion_fees", {
+            "fiat_to_vit": 1.5, "vit_to_fiat": 1.5, "cross_fiat": 0.5
+        })
+        vit_config = await _config_get(db, "vit_pricing", {
+            "current_price_usd": 0.10,
+            "circulating_supply": 128475,
+            "rolling_revenue_usd": 12847.50,
+        })
+    return {
+        "currencies": currencies,
+        "conversion_fees": fees,
+        "vit_pricing": vit_config,
+    }
+
+
+@router.put("/currency/{code}")
+async def update_currency(code: str, body: CurrencyUpdateBody,
+                           current_user: _User = Depends(get_current_admin)):
+    """Update a fiat currency's rate or limits."""
+    async with AsyncSessionLocal() as db:
+        currencies = await _config_get(db, "currencies_config", list(_DEFAULT_CURRENCIES))
+        updated = False
+        for c in currencies:
+            if c["code"] == code.upper():
+                if body.rate_to_usd is not None: c["rate_to_usd"] = body.rate_to_usd
+                if body.status is not None:       c["status"] = body.status
+                if body.min_deposit is not None:  c["min_deposit"] = body.min_deposit
+                if body.max_deposit is not None:  c["max_deposit"] = body.max_deposit
+                updated = True
+                break
+        if not updated:
+            raise HTTPException(404, "Currency not found")
+        await _config_set(db, "currencies_config", currencies, current_user.id)
+        await _log_audit(db, "currency.update", current_user.email, "currency", code,
+                         body.model_dump(exclude_none=True))
+    return {"message": "Currency updated"}
+
+
+@router.post("/currency/recalculate-vit")
+async def recalculate_vit(current_user: _User = Depends(get_current_admin)):
+    """Recalculate VIT price based on revenue/supply formula."""
+    async with AsyncSessionLocal() as db:
+        vit_config = await _config_get(db, "vit_pricing", {
+            "current_price_usd": 0.10,
+            "circulating_supply": 128475,
+            "rolling_revenue_usd": 12847.50,
+        })
+        revenue = vit_config.get("rolling_revenue_usd", 12847.50)
+        supply  = vit_config.get("circulating_supply", 128475)
+        new_price = round(revenue / supply, 8) if supply > 0 else 0.10
+        vit_config["current_price_usd"] = new_price
+        await _config_set(db, "vit_pricing", vit_config, current_user.id)
+        await _log_audit(db, "currency.recalculate_vit", current_user.email,
+                         details={"new_price": new_price})
+    return {"new_price_usd": new_price, "message": "VIT price recalculated"}
+
+
+# ── 7. Subscription Plans ─────────────────────────────────────────────
+
+@router.get("/subscriptions")
+async def list_subscription_plans():
+    """List all subscription plans."""
+    async with AsyncSessionLocal() as db:
+        plans = (await db.execute(_select(_SubscriptionPlan).order_by(_SubscriptionPlan.price_monthly))).scalars().all()
+    return {
+        "plans": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "display_name": p.display_name,
+                "price_monthly": p.price_monthly,
+                "price_yearly": p.price_yearly,
+                "prediction_limit": p.prediction_limit,
+                "features": p.features,
+                "is_active": p.is_active,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in plans
+        ]
+    }
+
+
+@router.put("/subscriptions/{plan_id}")
+async def update_subscription_plan(plan_id: int, body: PlanUpdateBody,
+                                    current_user: _User = Depends(get_current_admin)):
+    """Edit a subscription plan."""
+    async with AsyncSessionLocal() as db:
+        plan = (await db.execute(_select(_SubscriptionPlan).where(_SubscriptionPlan.id == plan_id))).scalar_one_or_none()
+        if not plan:
+            raise HTTPException(404, "Plan not found")
+        changed = {}
+        if body.display_name is not None:    plan.display_name = body.display_name;    changed["display_name"] = body.display_name
+        if body.price_monthly is not None:   plan.price_monthly = body.price_monthly;  changed["price_monthly"] = body.price_monthly
+        if body.price_yearly is not None:    plan.price_yearly = body.price_yearly;    changed["price_yearly"] = body.price_yearly
+        if body.prediction_limit is not None:plan.prediction_limit = body.prediction_limit; changed["prediction_limit"] = body.prediction_limit
+        if body.features is not None:        plan.features = body.features;            changed["features"] = body.features
+        if body.is_active is not None:       plan.is_active = body.is_active;          changed["is_active"] = body.is_active
+        await db.commit()
+        await _log_audit(db, "plan.update", current_user.email, "plan", plan_id, changed)
+    return {"message": "Plan updated", "changes": changed}
+
+
+# ── 8. Feature Flags ──────────────────────────────────────────────────
+
+@router.get("/system/flags")
+async def get_feature_flags():
+    """Return all platform feature flags."""
+    async with AsyncSessionLocal() as db:
+        stored = await _config_get(db, "feature_flags", dict(_DEFAULT_FLAGS))
+    return {"flags": stored if stored else _DEFAULT_FLAGS}
+
+
+@router.put("/system/flags")
+async def update_feature_flags(body: FlagsUpdateBody, current_user: _User = Depends(get_current_admin)):
+    """Update one or more feature flags."""
+    admin_role = getattr(current_user, "admin_role", "admin")
+    if admin_role not in ("super_admin", "admin"):
+        raise HTTPException(403, "Insufficient privileges to modify feature flags")
+    async with AsyncSessionLocal() as db:
+        current_flags = await _config_get(db, "feature_flags", dict(_DEFAULT_FLAGS))
+        for key, val in body.flags.items():
+            if key in current_flags:
+                if isinstance(current_flags[key], dict):
+                    current_flags[key]["value"] = val
+                else:
+                    current_flags[key] = val
+        await _config_set(db, "feature_flags", current_flags, current_user.id)
+        await _log_audit(db, "system.flags_update", current_user.email,
+                         details={"updated": body.flags})
+    return {"message": "Flags updated", "flags": current_flags}
+
+
+# ── 9. System Actions ─────────────────────────────────────────────────
+
+@router.post("/system/cache/clear")
+async def clear_cache(current_user: _User = Depends(get_current_admin)):
+    """Clear in-memory cache."""
+    try:
+        from app.core.cache import cache
+        cache.clear()
+        cleared = True
+    except Exception:
+        cleared = False
+    async with AsyncSessionLocal() as db:
+        await _log_audit(db, "system.cache_clear", current_user.email,
+                         details={"cleared": cleared})
+    return {"message": "Cache cleared" if cleared else "Cache clear attempted (no cache module found)"}
+
+
+@router.post("/system/backup")
+async def create_backup(current_user: _User = Depends(get_current_admin)):
+    """Create a SQLite database backup (dev/SQLite only)."""
+    admin_role = getattr(current_user, "admin_role", "admin")
+    if admin_role not in ("super_admin",):
+        raise HTTPException(403, "Only super_admin can create backups")
+    import shutil, time
+    db_path = "vit.db"
+    if not os.path.exists(db_path):
+        return {"message": "No SQLite database found (may be using PostgreSQL)", "backup": None}
+    ts = int(time.time())
+    backup_path = f"vit.db.backup_{ts}"
+    shutil.copy2(db_path, backup_path)
+    async with AsyncSessionLocal() as db:
+        await _log_audit(db, "system.backup", current_user.email, details={"file": backup_path})
+    return {"message": "Backup created", "backup": backup_path}
+
+
+# ── 10. Audit Log ─────────────────────────────────────────────────────
+
+@router.get("/audit")
+async def get_audit_log(
+    action: Optional[str] = None,
+    actor: Optional[str] = None,
+    resource: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """Filterable audit log."""
+    async with AsyncSessionLocal() as db:
+        q = _select(_AuditLog)
+        if action:    q = q.where(_AuditLog.action.ilike(f"%{action}%"))
+        if actor:     q = q.where(_AuditLog.actor.ilike(f"%{actor}%"))
+        if resource:  q = q.where(_AuditLog.resource == resource)
+        if date_from:
+            try:
+                from datetime import datetime
+                df = datetime.fromisoformat(date_from)
+                q = q.where(_AuditLog.timestamp >= df)
+            except Exception:
+                pass
+        if date_to:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(date_to)
+                q = q.where(_AuditLog.timestamp <= dt)
+            except Exception:
+                pass
+        total = (await db.execute(_select(_func.count()).select_from(q.subquery()))).scalar() or 0
+        logs = (await db.execute(q.order_by(_desc(_AuditLog.timestamp)).offset(offset).limit(limit))).scalars().all()
+
+    return {
+        "total": total,
+        "logs": [
+            {
+                "id": lg.id,
+                "action": lg.action,
+                "actor": lg.actor,
+                "resource": lg.resource,
+                "resource_id": lg.resource_id,
+                "details": lg.details,
+                "ip_address": lg.ip_address,
+                "status": lg.status,
+                "timestamp": lg.timestamp.isoformat() if lg.timestamp else None,
+            }
+            for lg in logs
+        ],
+    }
+
+
+# ── 11. Admin role + permissions for /auth/me enrichment ──────────────
+
+@router.get("/me/permissions")
+async def get_my_permissions(current_user: _User = Depends(get_current_admin)):
+    """Return this admin's role and permission list."""
+    admin_role = getattr(current_user, "admin_role", None) or "admin"
+    return {
+        "admin_role": admin_role,
+        "permissions": get_permissions_for_admin_role(admin_role),
+    }

@@ -190,13 +190,19 @@ async def me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    from app.core.roles import get_permissions_for_admin_role
+    admin_role = getattr(user, "admin_role", None)
     return {
         "id": user.id,
         "email": user.email,
         "username": user.username,
         "role": user.role,
+        "admin_role": admin_role,
+        "subscription_tier": getattr(user, "subscription_tier", "viewer") or "viewer",
+        "is_banned": getattr(user, "is_banned", False),
         "is_active": user.is_active,
         "is_verified": user.is_verified,
         "created_at": user.created_at,
         "last_login": user.last_login,
+        "permissions": get_permissions_for_admin_role(admin_role) if admin_role else [],
     }
