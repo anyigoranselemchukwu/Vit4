@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowUpRight, ArrowDownLeft, RefreshCcw, Landmark, ShieldCheck, AlertTriangle } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, RefreshCcw, Landmark, ShieldCheck, AlertTriangle, BadgeCheck } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiPost } from "@/lib/apiClient";
 
 const CURRENCIES = ["NGN", "USD", "USDT", "PI", "VITCoin"];
 const SYM: Record<string, string> = { NGN: "₦", USD: "$", USDT: "₮", PI: "π", VITCoin: "VIT " };
@@ -27,12 +29,22 @@ function BalanceCard({ label, value, symbol, highlight }: { label: string; value
 }
 
 export default function WalletPage() {
+  const queryClient = useQueryClient();
   const { data: wallet, isLoading: loadingWallet } = useGetWallet();
   const { data: txData, isLoading: loadingTx } = useListTransactions({ limit: 50 });
 
   const initiateDeposit = useInitiateDeposit();
   const withdraw = useWithdraw();
   const convert = useConvertCurrency();
+
+  const submitKyc = useMutation({
+    mutationFn: () => apiPost<{ kyc_verified: boolean; message: string }>("/api/wallet/kyc/submit", {}),
+    onSuccess: (data) => {
+      toast.success(data.message || "KYC verified successfully");
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/me"] });
+    },
+    onError: (e: any) => toast.error(e.message || "KYC submission failed"),
+  });
 
   const [depositCurrency, setDepositCurrency] = useState("NGN");
   const [depositAmount, setDepositAmount] = useState("");
@@ -122,9 +134,23 @@ export default function WalletPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-        <ShieldCheck className={`w-4 h-4 ${wallet.kyc_verified ? "text-primary" : "text-muted-foreground"}`} />
-        KYC: {wallet.kyc_verified ? "VERIFIED" : "PENDING"}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className={`flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border ${wallet.kyc_verified ? "border-primary/40 text-primary bg-primary/5" : "border-muted-foreground/30 text-muted-foreground"}`}>
+          <ShieldCheck className="w-3 h-3" />
+          KYC: {wallet.kyc_verified ? "VERIFIED" : "PENDING"}
+        </div>
+        {!wallet.kyc_verified && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="font-mono text-xs uppercase tracking-wider h-7 px-3 border-primary/40 text-primary hover:bg-primary/5"
+            onClick={() => submitKyc.mutate()}
+            disabled={submitKyc.isPending}
+          >
+            <BadgeCheck className="w-3 h-3 mr-1.5" />
+            {submitKyc.isPending ? "Verifying..." : "Complete KYC"}
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

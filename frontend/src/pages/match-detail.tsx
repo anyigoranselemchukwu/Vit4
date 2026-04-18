@@ -27,10 +27,29 @@ export default function MatchDetailPage() {
   const [stakeAmount, setStakeAmount] = useState("10");
 
   if (isLoading) {
-    return <div className="h-full flex items-center justify-center font-mono">RETRIEVING_DATA...</div>;
+    return (
+      <div className="h-full flex items-center justify-center font-mono text-muted-foreground">
+        <div className="text-center space-y-2">
+          <div className="text-2xl animate-pulse">⬡</div>
+          <div>RETRIEVING_DATA...</div>
+        </div>
+      </div>
+    );
   }
 
-  if (!match) return null;
+  if (!match) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center space-y-4 font-mono">
+          <div className="text-4xl text-muted-foreground">404</div>
+          <div className="text-muted-foreground uppercase text-sm">Match not found in the intelligence network</div>
+          <Button variant="outline" className="font-mono uppercase text-xs" onClick={() => setLocation("/matches")}>
+            <ChevronLeft className="w-4 h-4 mr-2" /> Return to Feed
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const homeProb = match.home_prob ?? 0;
   const drawProb = match.draw_prob ?? 0;

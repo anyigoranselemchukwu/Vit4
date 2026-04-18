@@ -1,4 +1,4 @@
-# VIT Sports Intelligence Network v4.0.0
+# VIT Sports Intelligence Network v4.1.0
 
 ## Overview
 A full-stack sports prediction platform combining a 12-model ML ensemble with AI insights, blockchain economy, wallet system, marketplace, governance, and complete module coverage across all 11 phases of the build roadmap.
@@ -43,8 +43,8 @@ bash scripts/start_fullstack.sh
 - `app/api/middleware/security.py` — Security headers middleware
 - `services/ml_service/` — 12-model ML ensemble
 
-## Frontend Pages (17)
-dashboard, matches, match-detail, predictions, wallet, validators, training, analytics, subscription, admin, marketplace, trust, bridge, developer, governance, auth (login/register), not-found
+## Frontend Pages (18)
+dashboard, matches, match-detail, predictions, wallet, validators, training, analytics, subscription, admin, marketplace, trust, bridge, developer, governance, auth (login/register), payment-callback, not-found
 
 ## Authentication
 - **JWT Bearer** — `Authorization: Bearer <token>`

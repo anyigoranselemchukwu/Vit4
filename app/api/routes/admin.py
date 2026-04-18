@@ -27,7 +27,7 @@ from itertools import combinations
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -38,10 +38,15 @@ from app.db.models import Match, Prediction
 from app.services.market_utils import MarketUtils
 from app.core.dependencies import get_orchestrator, get_telegram_alerts
 from app.services.results_settler import settle_results, fetch_live_matches
+from app.auth.dependencies import get_current_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(get_current_admin)],
+)
 
 orchestrator = get_orchestrator()
 telegram_alerts = get_telegram_alerts()

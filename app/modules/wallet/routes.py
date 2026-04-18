@@ -232,6 +232,21 @@ async def initiate_deposit(
         )
         db.add(pending_tx)
         await db.commit()
+        # ── Notification ────────────────────────────────────────────────
+        try:
+            from app.modules.notifications.service import NotificationService
+            from app.modules.notifications.models import NotificationType, NotificationChannel
+            await NotificationService.create(
+                db, current_user.id,
+                NotificationType.WALLET_ACTIVITY,
+                {"action": "Deposit initiated", "amount": request.amount, "currency": request.currency.upper()},
+                title="Deposit Initiated",
+                body=f"Your deposit of {request.amount} {request.currency.upper()} has been initiated. Ref: {ref}",
+                channel=NotificationChannel.IN_APP,
+            )
+            await db.commit()
+        except Exception:
+            pass
     except Exception:
         await db.rollback()
 
@@ -322,9 +337,53 @@ async def verify_deposit(
             reference=f"{request.reference}-CREDIT",
         )
         await db.commit()
+        # ── Notification ────────────────────────────────────────────────
+        try:
+            from app.modules.notifications.service import NotificationService as _NS
+            from app.modules.notifications.models import NotificationType as _NT, NotificationChannel as _NC
+            await _NS.create(
+                db, current_user.id,
+                _NT.WALLET_ACTIVITY,
+                {"action": "Deposit confirmed", "amount": float(verified_amount), "currency": request.currency.upper()},
+                title="Deposit Confirmed",
+                body=f"Your deposit of {float(verified_amount):.2f} {request.currency.upper()} has been confirmed and credited to your wallet.",
+                channel=_NC.IN_APP,
+            )
+            await db.commit()
+        except Exception:
+            pass
         return {"status": "confirmed", "amount": float(verified_amount), "currency": request.currency, "reference": request.reference}
 
     return {"status": verified_status, "reference": request.reference, "currency": request.currency}
+
+
+@router.post("/kyc/submit")
+async def submit_kyc(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger KYC verification (mock approval for demo — replace with real KYC provider)."""
+    from app.modules.wallet.models import Wallet as _Wallet
+    result = await db.execute(select(_Wallet).where(_Wallet.user_id == current_user.id))
+    wallet = result.scalar_one_or_none()
+    if not wallet:
+        raise HTTPException(404, "Wallet not found")
+    wallet.kyc_verified = True
+    await db.commit()
+    try:
+        from app.modules.notifications.service import NotificationService as _NS
+        from app.modules.notifications.models import NotificationType as _NT, NotificationChannel as _NC
+        await _NS.create(
+            db, current_user.id,
+            _NT.SYSTEM,
+            {"message": "Your KYC verification has been approved. Withdrawals are now enabled."},
+            title="KYC Approved",
+            channel=_NC.IN_APP,
+        )
+        await db.commit()
+    except Exception:
+        pass
+    return {"kyc_verified": True, "message": "KYC verification approved"}
 
 
 @router.post("/convert")

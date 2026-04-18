@@ -24,6 +24,7 @@ import DeveloperPage from "@/pages/developer";
 import GovernancePage from "@/pages/governance";
 import AccumulatorPage from "@/pages/accumulator";
 import OddsPage from "@/pages/odds";
+import PaymentCallbackPage from "@/pages/payment-callback";
 
 const queryClient = new QueryClient();
 
@@ -104,6 +105,7 @@ function Router() {
       <Route path="/odds">
         <Layout><ProtectedRoute component={OddsPage} /></Layout>
       </Route>
+      <Route path="/payment/callback" component={PaymentCallbackPage} />
       <Route>
         <Layout><NotFound /></Layout>
       </Route>

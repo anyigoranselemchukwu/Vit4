@@ -126,7 +126,42 @@ export function useListMatches(params?: Record<string, unknown>) {
 export function useGetMatch(id: string) {
   return useQuery<Match>({
     queryKey: getGetMatchQueryKey(id),
-    queryFn: () => apiGet<Match>(API.match(id)),
+    queryFn: async () => {
+      const raw = await apiGet<any>(API.match(id));
+      // Backend returns nested { match, prediction, clv, markets } — flatten for the component
+      if (raw && raw.match && raw.prediction) {
+        return {
+          match_id: raw.match.id,
+          home_team: raw.match.home_team,
+          away_team: raw.match.away_team,
+          league: raw.match.league,
+          kickoff_time: raw.match.kickoff_time,
+          ft_score: raw.match.ft_score,
+          actual_outcome: raw.match.actual_outcome,
+          status: raw.match.status,
+          home_prob: raw.prediction.home_prob,
+          draw_prob: raw.prediction.draw_prob,
+          away_prob: raw.prediction.away_prob,
+          over_25_prob: raw.prediction.over_25_prob,
+          btts_prob: raw.prediction.btts_prob,
+          consensus_prob: raw.prediction.consensus_prob,
+          recommended_stake: raw.prediction.recommended_stake,
+          final_ev: raw.prediction.final_ev,
+          edge: raw.prediction.edge,
+          confidence: raw.prediction.confidence,
+          bet_side: raw.prediction.bet_side,
+          entry_odds: raw.prediction.entry_odds,
+          clv: raw.clv?.clv ?? null,
+          profit: raw.clv?.profit ?? null,
+          timestamp: raw.prediction.timestamp,
+          // Pass through extra rich data for extended display
+          _markets: raw.markets,
+          _model_summary: raw.model_summary,
+          _neural_info: raw.neural_info,
+        } as Match & { _markets?: any; _model_summary?: any; _neural_info?: any };
+      }
+      return raw as Match;
+    },
     enabled: !!id,
   });
 }
