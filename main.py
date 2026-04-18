@@ -225,7 +225,7 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import select as _select
 
         _admin_email = _os.environ.get("ADMIN_EMAIL", "admin@vit.network")
-        _admin_pass = _os.environ.get("ADMIN_PASSWORD", "VitAdmin2025!")
+        _admin_pass = _os.environ.get("ADMIN_PASSWORD", "VIT@Admin2026!")
         _admin_user = _os.environ.get("ADMIN_USERNAME", "vit_admin")
 
         async with AsyncSessionLocal() as _db:
