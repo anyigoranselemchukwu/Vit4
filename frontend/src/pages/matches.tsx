@@ -12,11 +12,21 @@ export default function MatchesPage() {
 
   const { data, isLoading } = useListMatches();
 
-  const matches = (data?.predictions ?? []).filter((m) =>
-    m.home_team.toLowerCase().includes(search.toLowerCase()) ||
-    m.away_team.toLowerCase().includes(search.toLowerCase()) ||
-    m.league.toLowerCase().includes(search.toLowerCase())
-  );
+  const allMatches = data?.predictions ?? [];
+  const matches = allMatches.filter((m) => {
+    const matchesSearch =
+      m.home_team.toLowerCase().includes(search.toLowerCase()) ||
+      m.away_team.toLowerCase().includes(search.toLowerCase()) ||
+      m.league.toLowerCase().includes(search.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (statusFilter === "all") return true;
+    if (statusFilter === "completed") return m.actual_outcome != null;
+    if (statusFilter === "upcoming") return m.actual_outcome == null;
+    if (statusFilter === "live") return m.actual_outcome == null;
+    return true;
+  });
 
   return (
     <div className="space-y-6">

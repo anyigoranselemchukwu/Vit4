@@ -54,18 +54,26 @@ export default function WalletPage() {
   if (!wallet) return null;
 
   const handleDeposit = async () => {
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
     try {
       const result = await initiateDeposit.mutateAsync({
         currency: depositCurrency,
         amount: parseFloat(depositAmount),
         method: depositMethod,
       });
-      if (result.payment_url) {
-        window.open(result.payment_url, "_blank");
-        toast.success(`Deposit initiated — ref: ${result.reference}`);
+      if (result.payment_link && !result.payment_link.includes("paystack.com/pay/vit-sports")) {
+        window.open(result.payment_link, "_blank");
+        toast.success(`Payment window opened — ref: ${result.reference}`);
       } else {
-        toast.info("Deposit request sent. Confirm via payment gateway.");
+        toast.success(
+          `Deposit queued — ref: ${result.reference}. Complete payment via your gateway.`,
+          { duration: 6000 }
+        );
       }
+      setDepositAmount("");
     } catch (e: any) {
       toast.error(e.message || "Deposit failed");
     }

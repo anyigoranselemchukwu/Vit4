@@ -136,15 +136,112 @@ async def initiate_deposit(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Initiate a deposit (returns payment link or address)."""
+    """Initiate a deposit — calls Paystack/Stripe when keys are configured."""
     import uuid as _uuid
+    import os as _os
+
     service = WalletService(db)
-    await service.get_or_create_wallet(current_user.id)
+    wallet = await service.get_or_create_wallet(current_user.id)
     ref = f"DEP-{current_user.id}-{_uuid.uuid4().hex[:8].upper()}"
+
+    payment_link = None
+    gateway_error = None
+
+    # ── Paystack (NGN) ────────────────────────────────────────────────
+    if request.method == "paystack":
+        paystack_key = _os.environ.get("PAYSTACK_SECRET_KEY", "")
+        if paystack_key:
+            try:
+                import httpx as _httpx
+                # Paystack expects amount in kobo (NGN * 100)
+                amount_kobo = int(float(request.amount) * 100)
+                async with _httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.post(
+                        "https://api.paystack.co/transaction/initialize",
+                        headers={"Authorization": f"Bearer {paystack_key}"},
+                        json={
+                            "email": current_user.email,
+                            "amount": amount_kobo,
+                            "reference": ref,
+                            "currency": "NGN",
+                            "metadata": {
+                                "user_id": current_user.id,
+                                "vit_ref": ref,
+                            },
+                        },
+                    )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("status"):
+                        payment_link = data["data"]["authorization_url"]
+                else:
+                    gateway_error = f"Paystack error {resp.status_code}"
+            except Exception as _e:
+                gateway_error = str(_e)
+
+    # ── Stripe (USD) ──────────────────────────────────────────────────
+    elif request.method == "stripe":
+        stripe_key = _os.environ.get("STRIPE_SECRET_KEY", "")
+        if stripe_key:
+            try:
+                import httpx as _httpx
+                amount_cents = int(float(request.amount) * 100)
+                async with _httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.post(
+                        "https://api.stripe.com/v1/checkout/sessions",
+                        auth=(stripe_key, ""),
+                        data={
+                            "payment_method_types[]": "card",
+                            "line_items[0][price_data][currency]": "usd",
+                            "line_items[0][price_data][product_data][name]": "VIT Wallet Deposit",
+                            "line_items[0][price_data][unit_amount]": str(amount_cents),
+                            "line_items[0][quantity]": "1",
+                            "mode": "payment",
+                            "client_reference_id": ref,
+                            "success_url": f"https://{_os.environ.get('REPL_SLUG', 'localhost')}.replit.app/wallet?deposit=success&ref={ref}",
+                            "cancel_url": f"https://{_os.environ.get('REPL_SLUG', 'localhost')}.replit.app/wallet?deposit=cancelled",
+                            "metadata[vit_ref]": ref,
+                            "metadata[user_id]": str(current_user.id),
+                        },
+                    )
+                if resp.status_code == 200:
+                    payment_link = resp.json().get("url")
+                else:
+                    gateway_error = f"Stripe error {resp.status_code}"
+            except Exception as _e:
+                gateway_error = str(_e)
+
+    # ── Record pending transaction ─────────────────────────────────────
+    try:
+        from app.modules.wallet.models import WalletTransaction as _WalletTx
+        pending_tx = _WalletTx(
+            id=str(_uuid.uuid4()),
+            user_id=current_user.id,
+            wallet_id=wallet.id,
+            type="deposit",
+            currency=request.currency.upper(),
+            amount=Decimal(str(request.amount)),
+            direction="credit",
+            status="pending",
+            reference=ref,
+            tx_metadata={
+                "method": request.method,
+                "gateway_error": gateway_error,
+                "payment_link": payment_link,
+            },
+        )
+        db.add(pending_tx)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    fallback_link = payment_link or f"https://paystack.com/pay/vit-sports?ref={ref}"
+
     return {
         "status": "pending",
         "reference": ref,
-        "payment_link": "https://paystack.com/pay/vit-sports",
+        "payment_link": fallback_link,
+        "gateway_error": gateway_error,
         "expires_at": (datetime.utcnow() + timedelta(hours=1)).isoformat(),
         "currency": request.currency,
         "amount": request.amount,
@@ -158,13 +255,76 @@ async def verify_deposit(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Verify a completed deposit."""
-    return {
-        "status": "confirmed",
-        "amount": 100.00,
-        "currency": request.currency,
-        "reference": request.reference,
-    }
+    """Verify a completed deposit and credit the wallet if confirmed."""
+    import os as _os
+    from app.modules.wallet.models import WalletTransaction as _WalletTx, Currency as _Currency
+
+    verified_amount = None
+    verified_status = "failed"
+
+    # ── Verify with Paystack ──────────────────────────────────────────
+    paystack_key = _os.environ.get("PAYSTACK_SECRET_KEY", "")
+    if paystack_key:
+        try:
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://api.paystack.co/transaction/verify/{request.reference}",
+                    headers={"Authorization": f"Bearer {paystack_key}"},
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") and data["data"]["status"] == "success":
+                    verified_amount = Decimal(str(data["data"]["amount"])) / 100  # kobo → NGN
+                    verified_status = "confirmed"
+        except Exception:
+            pass
+
+    if verified_status == "confirmed" and verified_amount is not None:
+        service = WalletService(db)
+        wallet = await service.get_or_create_wallet(current_user.id)
+        # Update existing pending tx to confirmed
+        tx_result = await db.execute(
+            select(_WalletTx).where(
+                _WalletTx.reference == request.reference,
+                _WalletTx.user_id == current_user.id,
+            )
+        )
+        tx = tx_result.scalar_one_or_none()
+        if tx:
+            tx.status = "confirmed"
+            tx.amount = verified_amount
+            tx.processed_at = datetime.utcnow()
+        else:
+            import uuid as _uuid
+            db.add(_WalletTx(
+                id=str(_uuid.uuid4()),
+                user_id=current_user.id,
+                wallet_id=wallet.id,
+                type="deposit",
+                currency=request.currency.upper(),
+                amount=verified_amount,
+                direction="credit",
+                status="confirmed",
+                reference=request.reference,
+            ))
+        # Credit the wallet
+        try:
+            currency_enum = _Currency(request.currency.upper())
+        except ValueError:
+            currency_enum = _Currency.NGN
+        await service.credit(
+            wallet_id=wallet.id,
+            user_id=current_user.id,
+            currency=currency_enum,
+            amount=verified_amount,
+            tx_type="deposit",
+            reference=f"{request.reference}-CREDIT",
+        )
+        await db.commit()
+        return {"status": "confirmed", "amount": float(verified_amount), "currency": request.currency, "reference": request.reference}
+
+    return {"status": verified_status, "reference": request.reference, "currency": request.currency}
 
 
 @router.post("/convert")

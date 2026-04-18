@@ -257,8 +257,10 @@ export function useListTransactions(params?: { currency?: string; limit?: number
 }
 
 export function useInitiateDeposit() {
-  return useMutation<{ payment_url: string; reference: string }, Error, { currency: string; amount: number; method: string }>({
-    mutationFn: (data) => apiPost<{ payment_url: string; reference: string }>(API.depositInitiate, data),
+  const queryClient = useQueryClient();
+  return useMutation<{ payment_link: string; reference: string; status: string; amount: number; currency: string; method: string }, Error, { currency: string; amount: number; method: string }>({
+    mutationFn: (data) => apiPost<{ payment_link: string; reference: string; status: string; amount: number; currency: string; method: string }>(API.depositInitiate, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [API.transactions] }),
   });
 }
 
