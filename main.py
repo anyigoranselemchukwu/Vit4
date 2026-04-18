@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func
 
 from fastapi.middleware.gzip import GZipMiddleware
-from app.config import get_env, APP_VERSION
+from app.config import get_env, APP_VERSION, print_config_status
 from app.db.database import engine, Base, get_db, _is_sqlite
 import app.db.models  # ensure all models registered
 import app.modules.wallet.models  # register wallet models with SQLAlchemy
@@ -184,7 +184,8 @@ async def subscription_expiry_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print(f"\n🚀 VIT Network v{APP_VERSION} starting...")
+    print_config_status()
+    print(f"🚀 VIT Network v{APP_VERSION} starting...")
 
     # DB INIT
     async with engine.begin() as conn:
@@ -243,6 +244,150 @@ async def lifespan(app: FastAPI):
                 print(f"✅ Admin account found: {_admin_email}")
     except Exception as _e:
         print(f"⚠️  Admin seeding failed: {_e}")
+
+    # SEED SUBSCRIPTION PLANS
+    try:
+        from app.db.database import AsyncSessionLocal
+        from app.db.models import SubscriptionPlan
+        from sqlalchemy import select as _select
+
+        _plans = [
+            {
+                "name": "free",
+                "display_name": "Free",
+                "price_monthly": 0.0,
+                "price_yearly": 0.0,
+                "prediction_limit": 5,
+                "features": {
+                    "predictions": True,
+                    "basic_history": True,
+                    "advanced_analytics": False,
+                    "ai_insights": False,
+                    "accumulator_builder": False,
+                    "model_breakdown": False,
+                    "telegram_alerts": False,
+                    "bankroll_tools": False,
+                    "csv_upload": False,
+                    "priority_support": False,
+                },
+            },
+            {
+                "name": "pro",
+                "display_name": "Pro",
+                "price_monthly": 49.0,
+                "price_yearly": 490.0,
+                "prediction_limit": 100,
+                "features": {
+                    "predictions": True,
+                    "basic_history": True,
+                    "advanced_analytics": True,
+                    "ai_insights": True,
+                    "accumulator_builder": True,
+                    "model_breakdown": True,
+                    "telegram_alerts": True,
+                    "bankroll_tools": True,
+                    "csv_upload": False,
+                    "priority_support": False,
+                },
+            },
+            {
+                "name": "elite",
+                "display_name": "Elite",
+                "price_monthly": 199.0,
+                "price_yearly": 1990.0,
+                "prediction_limit": 1000,
+                "features": {
+                    "predictions": True,
+                    "basic_history": True,
+                    "advanced_analytics": True,
+                    "ai_insights": True,
+                    "accumulator_builder": True,
+                    "model_breakdown": True,
+                    "telegram_alerts": True,
+                    "bankroll_tools": True,
+                    "csv_upload": True,
+                    "priority_support": True,
+                    "validator_eligibility": True,
+                    "revenue_share": True,
+                },
+            },
+        ]
+
+        async with AsyncSessionLocal() as _db:
+            _count = (await _db.execute(_select(func.count()).select_from(SubscriptionPlan))).scalar()
+            if _count == 0:
+                for _p in _plans:
+                    _db.add(SubscriptionPlan(
+                        name=_p["name"],
+                        display_name=_p["display_name"],
+                        price_monthly=_p["price_monthly"],
+                        price_yearly=_p["price_yearly"],
+                        prediction_limit=_p["prediction_limit"],
+                        features=_p["features"],
+                        is_active=True,
+                    ))
+                await _db.commit()
+                print("✅ Subscription plans seeded (Free / Pro / Elite)")
+            else:
+                print(f"✅ Subscription plans: {_count} already seeded")
+    except Exception as _e:
+        print(f"⚠️  Subscription plan seeding failed: {_e}")
+
+    # BACKFILL WALLETS FOR EXISTING USERS
+    try:
+        import uuid as _uuid
+        from decimal import Decimal as _Decimal
+        from app.db.database import AsyncSessionLocal
+        from app.db.models import User as _User
+        from app.modules.wallet.models import Wallet as _Wallet
+        from sqlalchemy import select as _select
+
+        async with AsyncSessionLocal() as _db:
+            _users = (await _db.execute(_select(_User))).scalars().all()
+            _created = 0
+            for _u in _users:
+                _existing_wallet = (await _db.execute(
+                    _select(_Wallet).where(_Wallet.user_id == _u.id)
+                )).scalar_one_or_none()
+                if not _existing_wallet:
+                    _db.add(_Wallet(
+                        id=str(_uuid.uuid4()),
+                        user_id=_u.id,
+                        vitcoin_balance=_Decimal("100.00000000"),
+                    ))
+                    _created += 1
+            if _created:
+                await _db.commit()
+                print(f"✅ Wallets backfilled for {_created} existing user(s)")
+    except Exception as _e:
+        print(f"⚠️  Wallet backfill failed: {_e}")
+
+    # SECURE ADMIN PASSWORDS — update legacy default passwords on startup
+    try:
+        import os as _os
+        from app.db.database import AsyncSessionLocal
+        from app.db.models import User as _User
+        from app.auth.jwt_utils import hash_password, verify_password
+        from sqlalchemy import select as _select
+
+        _LEGACY_PASSWORDS = ["admin123", "Admin123", "VitAdmin2025!", "password"]
+        _secure_pass = _os.environ.get("ADMIN_PASSWORD", "")
+
+        if _secure_pass:
+            async with AsyncSessionLocal() as _db:
+                _admins = (await _db.execute(_select(_User).where(_User.role == "admin"))).scalars().all()
+                _updated = 0
+                for _admin in _admins:
+                    for _legacy in _LEGACY_PASSWORDS:
+                        if verify_password(_legacy, _admin.hashed_password):
+                            _admin.hashed_password = hash_password(_secure_pass)
+                            _updated += 1
+                            break
+                if _updated:
+                    await _db.commit()
+                    print(f"✅ Updated {_updated} admin account(s) to use ADMIN_PASSWORD from environment")
+    except Exception as _e:
+        print(f"⚠️  Admin password security check failed: {_e}")
 
     # SERVICES
     orchestrator = get_orchestrator()

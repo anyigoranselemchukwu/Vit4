@@ -1,6 +1,8 @@
 # app/auth/routes.py
 import os
+import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -10,6 +12,7 @@ from sqlalchemy import select
 
 from app.db.database import get_db
 from app.db.models import User
+from app.modules.wallet.models import Wallet
 from app.auth.jwt_utils import (
     hash_password,
     verify_password,
@@ -95,6 +98,15 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         is_verified=False,
     )
     db.add(user)
+    await db.flush()  # assigns user.id without committing
+
+    # Auto-create wallet with 100 VITCoin onboarding bonus
+    wallet = Wallet(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        vitcoin_balance=Decimal("100.00000000"),
+    )
+    db.add(wallet)
     await db.commit()
     await db.refresh(user)
 

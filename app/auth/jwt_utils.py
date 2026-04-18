@@ -6,7 +6,9 @@ from typing import Optional
 import bcrypt as _bcrypt
 from jose import JWTError, jwt
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "vit-change-this-in-production-secret-key-2024")
+from app.config import JWT_SECRET_KEY as _CONFIG_JWT_SECRET
+
+SECRET_KEY = _CONFIG_JWT_SECRET or os.getenv("JWT_SECRET_KEY", "vit-change-this-in-production-secret-key-2024")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
