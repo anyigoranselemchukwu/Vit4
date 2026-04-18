@@ -1,0 +1,6 @@
+.env
+.vit_jwt_secret
+frontend/node_modules/
+GrownLawfulFunction/frontend/node_modules/
+__pycache__/
+.pytest_cache/

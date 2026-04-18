@@ -225,21 +225,24 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import select as _select
 
         _admin_email = _os.environ.get("ADMIN_EMAIL", "admin@vit.network")
-        _admin_pass = _os.environ.get("ADMIN_PASSWORD", "VIT@Admin2026!")
+        _admin_pass = _os.environ.get("ADMIN_PASSWORD")
         _admin_user = _os.environ.get("ADMIN_USERNAME", "vit_admin")
 
         async with AsyncSessionLocal() as _db:
             _exists = (await _db.execute(_select(_User).where(_User.email == _admin_email))).scalar_one_or_none()
             if not _exists:
-                _db.add(_User(
-                    email=_admin_email,
-                    username=_admin_user,
-                    hashed_password=hash_password(_admin_pass),
-                    role="admin",
-                    is_active=True,
-                ))
-                await _db.commit()
-                print(f"✅ Default admin created: {_admin_email}")
+                if not _admin_pass:
+                    print("⚠️  Default admin creation skipped: set ADMIN_PASSWORD or register the first user")
+                else:
+                    _db.add(_User(
+                        email=_admin_email,
+                        username=_admin_user,
+                        hashed_password=hash_password(_admin_pass),
+                        role="admin",
+                        is_active=True,
+                    ))
+                    await _db.commit()
+                    print(f"✅ Default admin created: {_admin_email}")
             else:
                 print(f"✅ Admin account found: {_admin_email}")
     except Exception as _e:

@@ -1,5 +1,6 @@
 import os
 import sys
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -14,6 +15,26 @@ def get_env(name: str, default: str = "") -> str:
     if value:
         return value
     return os.getenv(name, default) or default
+
+
+def _get_secure_secret_key() -> str:
+    configured = get_env("JWT_SECRET_KEY") or get_env("SECRET_KEY")
+    if configured:
+        return configured
+    if get_env("REPLIT_DEPLOYMENT") or get_env("ENVIRONMENT").lower() == "production":
+        raise RuntimeError("JWT_SECRET_KEY must be configured before running in production.")
+    secret_path = Path(__file__).resolve().parents[1] / ".vit_jwt_secret"
+    if secret_path.exists():
+        value = secret_path.read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    value = secrets.token_urlsafe(48)
+    secret_path.write_text(value, encoding="utf-8")
+    try:
+        secret_path.chmod(0o600)
+    except OSError:
+        pass
+    return value
 
 
 # ── Application version (single source of truth) ──────────────────────
@@ -31,8 +52,8 @@ BACKEND_PORT: int  = int(get_env("BACKEND_PORT",  "8000"))
 FRONTEND_PORT: int = int(get_env("FRONTEND_PORT", "5000"))
 
 # ── Security keys ──────────────────────────────────────────────────────
-SECRET_KEY: str     = get_env("SECRET_KEY",     "vit-change-this-in-production-fallback-key")
-JWT_SECRET_KEY: str = get_env("JWT_SECRET_KEY", SECRET_KEY)
+SECRET_KEY: str     = get_env("SECRET_KEY") or _get_secure_secret_key()
+JWT_SECRET_KEY: str = get_env("JWT_SECRET_KEY") or SECRET_KEY
 
 # ── External API keys ─────────────────────────────────────────────────
 FOOTBALL_DATA_API_KEY: str = get_env("FOOTBALL_DATA_API_KEY", "")

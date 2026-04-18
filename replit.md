@@ -60,6 +60,8 @@ dashboard, matches, match-detail, predictions, wallet, validators, training, ana
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` — Telegram alerts
 - `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROK_API_KEY` — AI match insights
 - `JWT_SECRET_KEY` — JWT signing key (change before production)
+- If `JWT_SECRET_KEY` is not set in development, the app creates a local `.vit_jwt_secret`; production requires an explicit secret.
+- `ADMIN_PASSWORD` — optional default admin seed password; without it, startup will not create a new default admin account.
 - `STRIPE_SECRET_KEY` — Stripe payments
 - `ACCESS_TOKEN_EXPIRE_MINUTES` — JWT TTL (default: 60)
 - `REFRESH_TOKEN_EXPIRE_DAYS` — refresh TTL (default: 30)
