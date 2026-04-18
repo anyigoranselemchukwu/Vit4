@@ -5,7 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
+import { ErrorBoundary } from "@/components/error-boundary";
 
+import LandingPage from "@/pages/landing";
 import AuthPage from "@/pages/auth";
 import DashboardPage from "@/pages/dashboard";
 import MatchesPage from "@/pages/matches";
@@ -26,20 +28,41 @@ import AccumulatorPage from "@/pages/accumulator";
 import OddsPage from "@/pages/odds";
 import PaymentCallbackPage from "@/pages/payment-callback";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error: any) => {
+        if (error?.message?.includes("401") || error?.message?.includes("Session expired")) return false;
+        return failureCount < 2;
+      },
+      staleTime: 15_000,
+    },
+  },
+});
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
-  
+
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center font-mono">INITIALIZING...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <span className="font-mono text-xs text-muted-foreground uppercase tracking-widest">Initializing...</span>
+        </div>
+      </div>
+    );
   }
-  
+
   if (!user) {
     return <Redirect to="/login" />;
   }
 
-  return <Component />;
+  return (
+    <ErrorBoundary>
+      <Component />
+    </ErrorBoundary>
+  );
 }
 
 function Router() {
@@ -48,7 +71,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/">
-        {user ? <Redirect to="/dashboard" /> : <Redirect to="/login" />}
+        {user ? <Redirect to="/dashboard" /> : <LandingPage />}
       </Route>
       <Route path="/login" component={AuthPage} />
       <Route path="/register" component={AuthPage} />
@@ -119,8 +142,20 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
-            <Router />
-            <Toaster theme="dark" position="bottom-right" />
+            <ErrorBoundary>
+              <Router />
+            </ErrorBoundary>
+            <Toaster
+              theme="dark"
+              position="bottom-right"
+              toastOptions={{
+                classNames: {
+                  toast: "font-mono text-xs",
+                  title: "font-mono text-sm",
+                  description: "font-mono text-xs",
+                },
+              }}
+            />
           </AuthProvider>
         </WouterRouter>
       </TooltipProvider>

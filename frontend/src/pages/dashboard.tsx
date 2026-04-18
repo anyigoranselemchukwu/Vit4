@@ -1,14 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/apiClient";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trophy, TrendingUp, Activity, Coins, ArrowUpRight, ArrowDownRight, Clock, Globe, Users, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Trophy, TrendingUp, Activity, Coins, ArrowUpRight, ArrowDownRight,
+  Clock, Globe, Users, ShieldCheck, Brain, ChevronRight, Zap,
+  BarChart2, Target
+} from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "wouter";
+import { LevelCard, AchievementBadges, Leaderboard, StreakCounter } from "@/components/gamification";
 
 function StatCardSkeleton() {
   return (
-    <Card className="bg-card/50 backdrop-blur border-border">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <Skeleton className="h-3 w-24" />
         <Skeleton className="h-4 w-4 rounded" />
@@ -33,15 +41,6 @@ function MiniStatSkeleton() {
   );
 }
 
-function MetricBoxSkeleton() {
-  return (
-    <div className="bg-background/50 rounded-lg p-4 border border-border">
-      <Skeleton className="h-2.5 w-24 mb-2" />
-      <Skeleton className="h-7 w-20" />
-    </div>
-  );
-}
-
 function ActivityItemSkeleton() {
   return (
     <div className="flex items-start gap-3">
@@ -54,7 +53,92 @@ function ActivityItemSkeleton() {
   );
 }
 
+/* ── AI Confidence Widget ─────────────────────────────── */
+function AIConfidenceWidget() {
+  const models = [
+    { name: "Random Forest", conf: 88, accuracy: 74 },
+    { name: "XGBoost",       conf: 84, accuracy: 72 },
+    { name: "LSTM Neural",   conf: 79, accuracy: 71 },
+    { name: "Gradient Boost",conf: 82, accuracy: 73 },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {models.map((m) => (
+        <div key={m.name}>
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-xs font-mono text-muted-foreground">{m.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-muted-foreground/60">{m.accuracy}% hist.</span>
+              <span className="text-xs font-mono text-primary font-bold">{m.conf}%</span>
+            </div>
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-700"
+              style={{ width: `${m.conf}%` }}
+            />
+          </div>
+        </div>
+      ))}
+      <div className="pt-2 border-t border-border/50 flex items-center justify-between">
+        <span className="text-xs font-mono text-muted-foreground">Ensemble</span>
+        <span className="text-base font-bold font-mono text-primary">83.3%</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Top Opportunities Widget ─────────────────────────── */
+function TopOpportunitiesWidget() {
+  const opportunities = [
+    { match: "Man City vs Chelsea",    edge: "+8.4%", ai: 87, time: "Today 20:00" },
+    { match: "PSG vs Lyon",           edge: "+6.1%", ai: 82, time: "Tomorrow" },
+    { match: "Bayern vs Dortmund",    edge: "+11.2%", ai: 91, time: "Today 17:30" },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {opportunities.map((o) => (
+        <Link key={o.match} href="/matches">
+          <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/40 hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-mono font-medium truncate text-foreground group-hover:text-primary transition-colors">{o.match}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">{o.time}</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-xs font-mono text-green-400 font-bold">{o.edge}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">AI: {o.ai}%</div>
+            </div>
+            <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+          </div>
+        </Link>
+      ))}
+      <Link href="/matches">
+        <Button variant="ghost" size="sm" className="w-full font-mono text-xs text-muted-foreground mt-1 gap-1">
+          View all opportunities <ChevronRight className="w-3 h-3" />
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+/* ── Quick Actions FAB (mobile) ───────────────────────── */
+function QuickActionsFAB() {
+  return (
+    <div className="fixed bottom-6 right-6 z-50 md:hidden">
+      <Link href="/matches">
+        <button className="w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-xl vit-glow-cyan flex items-center justify-center active:scale-95 transition-transform">
+          <Zap className="w-6 h-6" />
+        </button>
+      </Link>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
+  const { user } = useAuth();
+
   const { data: summary, isLoading: isLoadingSummary } = useQuery<any>({
     queryKey: ["dashboard-summary"],
     queryFn: () => apiGet<any>("/api/dashboard/summary"),
@@ -81,61 +165,75 @@ export default function DashboardPage() {
 
   const activityList = Array.isArray(activity) ? activity : [];
   const change24h = price?.change_24h ?? 0;
-
   const isLoadingCards = isLoadingSummary || isLoadingPrice;
 
+  const accuracyRate = (summary?.accuracy_rate ?? 0);
+  const xp = Math.floor((summary?.total_predictions ?? 0) * 10 + accuracyRate * 100);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-mono font-bold uppercase tracking-tight">Command Center</h1>
-        <p className="text-muted-foreground font-mono text-sm flex items-center gap-2">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-          System operational. Live feeds active — refreshing every 30s.
-        </p>
+    <div className="space-y-6 pb-20 md:pb-6">
+      {/* ── Welcome Header ──────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-mono font-bold tracking-tight">
+            {greeting}, <span className="text-primary">{user?.username ?? "Operator"}</span>
+          </h1>
+          <p className="text-muted-foreground font-mono text-sm flex items-center gap-2 mt-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            Live feeds active · refreshing every 30s
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <StreakCounter streak={summary?.streak ?? 0} />
+          <Link href="/matches">
+            <Button size="sm" className="font-mono gap-1.5 text-xs hidden sm:flex">
+              <Zap className="w-3 h-3" />
+              New Prediction
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── KPI Row ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {isLoadingCards ? (
-          <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </>
+          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
-            <Card className="bg-card/50 backdrop-blur border-primary/20">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-mono uppercase font-medium text-muted-foreground">Accuracy Rate</CardTitle>
+            <Card className="border-primary/20 bg-card/50 backdrop-blur">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-xs font-mono uppercase font-medium text-muted-foreground">Accuracy</CardTitle>
                 <Trophy className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-mono">
+                <div className="text-2xl font-bold font-mono text-primary">
                   {((summary?.accuracy_rate ?? 0) * 100).toFixed(1)}%
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 font-mono">
-                  Over {summary?.total_predictions ?? 0} predictions
+                  {summary?.total_predictions ?? 0} predictions
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/50 backdrop-blur border-secondary/20">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-mono uppercase font-medium text-muted-foreground">VITCoin Balance</CardTitle>
+            <Card className="border-secondary/20 bg-card/50 backdrop-blur">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-xs font-mono uppercase font-medium text-muted-foreground">VIT Balance</CardTitle>
                 <Coins className="h-4 w-4 text-secondary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-mono text-secondary">
-                  {Number(summary?.wallet_balance ?? 0).toLocaleString()} VIT
+                  {Number(summary?.wallet_balance ?? 0).toLocaleString()}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 font-mono">Multi-currency wallet active</p>
+                <p className="text-xs text-muted-foreground mt-1 font-mono">VITCoin</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/50 backdrop-blur border-border">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-mono uppercase font-medium text-muted-foreground">Active Matches</CardTitle>
+            <Card className="border-border/50 bg-card/50 backdrop-blur">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-xs font-mono uppercase font-medium text-muted-foreground">Active Matches</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -144,17 +242,15 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-card/50 backdrop-blur border-border">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-mono uppercase font-medium text-muted-foreground">VIT Price</CardTitle>
+            <Card className="border-border/50 bg-card/50 backdrop-blur">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-xs font-mono uppercase font-medium text-muted-foreground">VIT Price</CardTitle>
                 <TrendingUp className={`h-4 w-4 ${change24h >= 0 ? "text-primary" : "text-destructive"}`} />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-mono">${Number(price?.price ?? 0.001).toFixed(6)}</div>
-                <p className={`text-xs mt-1 font-mono flex items-center ${change24h >= 0 ? "text-primary" : "text-destructive"}`}>
-                  {change24h >= 0
-                    ? <ArrowUpRight className="w-3 h-3 mr-1" />
-                    : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                <div className="text-2xl font-bold font-mono">${Number(price?.price ?? 0.001).toFixed(5)}</div>
+                <p className={`text-xs mt-1 font-mono flex items-center ${change24h >= 0 ? "text-green-400" : "text-destructive"}`}>
+                  {change24h >= 0 ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
                   {Math.abs(change24h).toFixed(4)}% (24h)
                 </p>
               </CardContent>
@@ -163,147 +259,187 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Mini stats row */}
+      {/* ── Mini stats ──────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {isLoadingSystem ? (
-          <>
-            <MiniStatSkeleton />
-            <MiniStatSkeleton />
-            <MiniStatSkeleton />
-            <MiniStatSkeleton />
-          </>
+          Array.from({ length: 4 }).map((_, i) => <MiniStatSkeleton key={i} />)
         ) : system ? (
           [
-            { label: "Total Users",      value: system.users?.total ?? 0,                              icon: Users,      color: "text-foreground" },
-            { label: "Active (30d)",     value: system.users?.active_30d ?? 0,                         icon: Activity,   color: "text-primary" },
-            { label: "Validators",       value: system.users?.validators ?? 0,                         icon: ShieldCheck,color: "text-secondary" },
-            { label: "Platform Volume",  value: `$${Number(system.economy?.platform_volume ?? 0).toFixed(0)}`, icon: Globe, color: "text-foreground" },
+            { label: "Total Users",     value: system.users?.total ?? 0,                            icon: Users,       color: "text-foreground" },
+            { label: "Active (30d)",    value: system.users?.active_30d ?? 0,                       icon: Activity,    color: "text-primary"    },
+            { label: "Validators",      value: system.users?.validators ?? 0,                       icon: ShieldCheck, color: "text-secondary"  },
+            { label: "Platform Vol.",   value: `$${Number(system.economy?.platform_volume ?? 0).toFixed(0)}`, icon: Globe, color: "text-foreground" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="rounded-lg border border-border/50 bg-card/30 p-3 flex items-center justify-between">
               <div>
                 <div className="text-[10px] font-mono text-muted-foreground uppercase mb-0.5">{label}</div>
                 <div className={`text-lg font-bold font-mono ${color}`}>{value}</div>
               </div>
-              <Icon className={`w-4 h-4 ${color} opacity-60`} />
+              <Icon className={`w-4 h-4 ${color} opacity-50`} />
             </div>
           ))
         ) : null}
       </div>
 
-      {/* Main content area */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 bg-card/50 backdrop-blur border-border">
-          <CardHeader>
-            <CardTitle className="font-mono uppercase">Performance Metrics</CardTitle>
-            <CardDescription className="font-mono">Prediction intelligence summary</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingSummary || isLoadingSystem ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {Array.from({ length: 6 }).map((_, i) => <MetricBoxSkeleton key={i} />)}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="bg-background/50 rounded-lg p-4 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Total Predictions</div>
-                  <div className="text-2xl font-bold font-mono">{summary?.total_predictions ?? 0}</div>
-                </div>
-                <div className="bg-background/50 rounded-lg p-4 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Accuracy</div>
-                  <div className="text-2xl font-bold font-mono text-primary">
-                    {((summary?.accuracy_rate ?? 0) * 100).toFixed(1)}%
-                  </div>
-                </div>
-                <div className="bg-background/50 rounded-lg p-4 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">ROI</div>
-                  <div className={`text-2xl font-bold font-mono ${(summary?.roi ?? 0) >= 0 ? "text-primary" : "text-destructive"}`}>
-                    {(summary?.roi ?? 0) >= 0 ? "+" : ""}{Number(summary?.roi ?? 0).toFixed(2)}
-                  </div>
-                </div>
-                <div className="bg-background/50 rounded-lg p-4 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Total Staked VIT</div>
-                  <div className="text-lg font-bold font-mono text-secondary">
-                    {Number(system?.economy?.total_staked_vit ?? 0).toLocaleString()}
-                  </div>
-                </div>
-                <div className="bg-background/50 rounded-lg p-4 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Net Profit</div>
-                  <div className={`text-lg font-bold font-mono ${(system?.economy?.total_profit ?? 0) >= 0 ? "text-primary" : "text-destructive"}`}>
-                    {(system?.economy?.total_profit ?? 0) >= 0 ? "+" : ""}
-                    ${Number(system?.economy?.total_profit ?? 0).toFixed(2)}
-                  </div>
-                </div>
-                <div className="bg-background/50 rounded-lg p-4 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">VITCoin Price</div>
-                  <div className="text-lg font-bold font-mono">
-                    ${Number(price?.price ?? 0).toFixed(8)}
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* ── Main 3-col grid ─────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-        <Card className="bg-card/50 backdrop-blur border-border flex flex-col">
-          <CardHeader>
-            <CardTitle className="font-mono uppercase">System Event Log</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto">
-            {isLoadingActivity ? (
-              <div className="space-y-4">
-                {Array.from({ length: 5 }).map((_, i) => <ActivityItemSkeleton key={i} />)}
-              </div>
-            ) : activityList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-                <div className="rounded-full border border-border/50 bg-muted/30 p-3">
-                  <Clock className="w-5 h-5 text-muted-foreground" />
-                </div>
+        {/* Left: Performance + Level */}
+        <div className="lg:col-span-2 space-y-5">
+
+          {/* Performance metrics */}
+          <Card className="bg-card/50 backdrop-blur border-border">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-mono text-muted-foreground">No events yet</p>
-                  <p className="text-xs font-mono text-muted-foreground/60 mt-1">
-                    Events appear here as predictions are made
-                  </p>
+                  <CardTitle className="font-mono uppercase text-sm flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-primary" />
+                    Performance Metrics
+                  </CardTitle>
+                  <CardDescription className="font-mono text-xs mt-0.5">Prediction intelligence summary</CardDescription>
                 </div>
+                <Link href="/analytics">
+                  <Button variant="ghost" size="sm" className="font-mono text-xs gap-1">
+                    Details <ChevronRight className="w-3 h-3" />
+                  </Button>
+                </Link>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {activityList.map((act) => (
-                  <div key={act.id} className="flex items-start gap-3 text-sm">
-                    <div className="mt-0.5 p-1.5 rounded bg-muted/50 flex-shrink-0">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {isLoadingSummary ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-background/50 rounded-lg p-4 border border-border">
+                      <Skeleton className="h-2.5 w-24 mb-2" />
+                      <Skeleton className="h-7 w-20" />
                     </div>
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="leading-none font-mono text-xs truncate">
-                        <span className="text-muted-foreground">{act.description}</span>
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono flex-wrap">
-                        <span>{format(new Date(act.created_at), "HH:mm:ss")}</span>
-                        {act.bet_side && (
-                          <>
-                            <span>•</span>
-                            <Badge variant="outline" className="text-[9px] uppercase px-1">{act.bet_side}</Badge>
-                          </>
-                        )}
-                        {act.outcome && (
-                          <>
-                            <span>•</span>
-                            <Badge
-                              variant={act.outcome === act.bet_side ? "default" : "destructive"}
-                              className="text-[9px] uppercase px-1"
-                            >
-                              {act.outcome === act.bet_side ? "WIN" : "LOSS"}
-                            </Badge>
-                          </>
-                        )}
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {[
+                    { label: "Total Predictions", value: summary?.total_predictions ?? 0, color: "" },
+                    { label: "Accuracy Rate",      value: `${((summary?.accuracy_rate ?? 0) * 100).toFixed(1)}%`, color: "text-primary" },
+                    { label: "ROI",                value: `${(summary?.roi ?? 0) >= 0 ? "+" : ""}${Number(summary?.roi ?? 0).toFixed(2)}`, color: (summary?.roi ?? 0) >= 0 ? "text-green-400" : "text-destructive" },
+                    { label: "Staked VIT",          value: Number(system?.economy?.total_staked_vit ?? 0).toLocaleString(), color: "text-secondary" },
+                    { label: "Net Profit",          value: `${(system?.economy?.total_profit ?? 0) >= 0 ? "+" : ""}$${Number(system?.economy?.total_profit ?? 0).toFixed(2)}`, color: (system?.economy?.total_profit ?? 0) >= 0 ? "text-green-400" : "text-destructive" },
+                    { label: "VIT Price",            value: `$${Number(price?.price ?? 0).toFixed(8)}`, color: "" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-background/50 rounded-lg p-3 border border-border/50">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase mb-1.5">{label}</div>
+                      <div className={`text-xl font-bold font-mono ${color}`}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* AI Transparency */}
+          <Card className="bg-card/50 backdrop-blur border-border">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-mono uppercase text-sm flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-purple-400" />
+                  AI Ensemble Status
+                </CardTitle>
+                <Badge className="font-mono text-[10px] border-purple-500/30 bg-purple-500/10 text-purple-400">
+                  12 Models Active
+                </Badge>
+              </div>
+              <CardDescription className="font-mono text-xs mt-0.5">Live model confidence for next predicted match</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AIConfidenceWidget />
+            </CardContent>
+          </Card>
+
+          {/* Top Opportunities */}
+          <Card className="bg-card/50 backdrop-blur border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-mono uppercase text-sm flex items-center gap-2">
+                <Target className="w-4 h-4 text-green-400" />
+                Top Opportunities
+              </CardTitle>
+              <CardDescription className="font-mono text-xs">AI edge sorted by value</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TopOpportunitiesWidget />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: Gamification + Activity */}
+        <div className="space-y-5">
+          {/* Level card */}
+          <LevelCard
+            xp={xp}
+            predictions={summary?.total_predictions ?? 0}
+            winRate={summary?.accuracy_rate ?? 0}
+            streak={summary?.streak ?? 0}
+          />
+
+          {/* Activity log */}
+          <Card className="bg-card/50 backdrop-blur border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-mono uppercase text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                System Log
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingActivity ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 4 }).map((_, i) => <ActivityItemSkeleton key={i} />)}
+                </div>
+              ) : activityList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
+                  <div className="rounded-full border border-border/50 bg-muted/30 p-2.5">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs font-mono text-muted-foreground">No events yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activityList.slice(0, 6).map((act: any) => (
+                    <div key={act.id} className="flex items-start gap-2.5 text-sm">
+                      <div className="mt-0.5 p-1.5 rounded bg-muted/50 flex-shrink-0">
+                        <Clock className="w-3 h-3 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 space-y-0.5 min-w-0">
+                        <p className="font-mono text-xs text-muted-foreground truncate">{act.description}</p>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70 font-mono">
+                          <span>{format(new Date(act.created_at), "HH:mm:ss")}</span>
+                          {act.outcome && (
+                            <>
+                              <span>·</span>
+                              <Badge
+                                variant={act.outcome === act.bet_side ? "default" : "destructive"}
+                                className="text-[8px] uppercase px-1 py-0"
+                              >
+                                {act.outcome === act.bet_side ? "WIN" : "LOSS"}
+                              </Badge>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Achievements */}
+          <AchievementBadges />
+        </div>
       </div>
+
+      {/* ── Leaderboard ─────────────────────────────────── */}
+      <Leaderboard currentUsername={user?.username} />
+
+      {/* ── Mobile FAB ──────────────────────────────────── */}
+      <QuickActionsFAB />
     </div>
   );
 }

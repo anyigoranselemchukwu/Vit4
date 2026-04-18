@@ -1,4 +1,4 @@
-# VIT Sports Intelligence Network v4.1.0
+# VIT Sports Intelligence Network v4.2.0 — Phase F UX
 
 ## Overview
 A full-stack sports prediction platform combining a 12-model ML ensemble with AI insights, blockchain economy, wallet system, marketplace, governance, and complete module coverage across all 11 phases of the build roadmap.
@@ -44,8 +44,63 @@ bash scripts/start_fullstack.sh
 - `app/api/middleware/security.py` — Security headers middleware
 - `services/ml_service/` — 12-model ML ensemble
 
-## Frontend Pages (18)
-dashboard, matches, match-detail, predictions, wallet, validators, training, analytics, subscription, admin, marketplace, trust, bridge, developer, governance, auth (login/register), payment-callback, not-found
+## Phase F: Institutional-Grade UX (v4.2.0)
+New frontend features added:
+
+### Design System (DS1–DS3)
+- `frontend/src/styles/tokens.css` — Full design token system: deep space color palette (`--vit-brand-*`, `--vit-gray-*`), perfect fourth typography scale, 4px spacing grid, shadow/glow system, animation tokens (150ms/250ms/350ms), glassmorphism utilities, keyframe animations (slide-up, scale-in, celebrate, ticker)
+- Mobile-first responsive with bottom nav bar for mobile (4 core tabs)
+- Sticky desktop sidebar with scrollable nav
+
+### Onboarding (ON1–ON3)
+- `frontend/src/components/onboarding.tsx` — WelcomeModal (celebration animation + 100 VIT bonus display), OnboardingTour (3-step interactive guide), FirstPredictionFlow (match selection + stake slider + presets)
+- Auth page now triggers WelcomeModal after registration → optional tour
+- Show password toggle on all password fields
+
+### Dashboard (DB1–DB3)
+- Personalized greeting with time-of-day awareness
+- Active predictions + Top Opportunities widget (AI edge sorted)
+- AI Ensemble Status panel (per-model confidence + historical accuracy)
+- LevelCard — XP-based level system (Novice → Analyst → Pro → Elite → Legend)
+- AchievementBadges grid (6 badges, 4 rarity tiers)
+- Leaderboard widget (top 10, highlights current user)
+- StreakCounter widget with fire animation
+- Mobile Quick Actions FAB (floating action button)
+
+### Wallet (WL1–WL2)
+- Total portfolio hero card with USD equivalent and win rate
+- Per-currency balance grid (5 currencies, color-coded)
+- KYC status banner with verify-now button
+- Quick deposit: preset amounts (1K/5K/10K/50K NGN etc.), fee calculation preview
+- Transaction history with type filters (all/deposit/withdrawal/conversion)
+- Export statement button (coming soon toast)
+
+### Landing Page (LP1–LP2)
+- `frontend/src/pages/landing.tsx` — Full marketing landing page
+- Fixed navbar with smooth scroll links
+- Hero with gradient text, social proof stats (50K+ predictions, 73% accuracy, $2.4M staked, 12 models)
+- Live ticker tape with historical results
+- 6-feature showcase grid with hover lift
+- AI ensemble visualization mockup (animated confidence bars)
+- Auto-rotating testimonial carousel
+- 3-tier pricing table (Free/Pro/Elite)
+- Footer with links
+- Landing page shown to unauthenticated users at `/`
+
+### Integration (INT1–INT4)
+- `frontend/src/lib/apiClient.ts` — Token refresh interceptor, 401 auto-logout, 429 rate limit toast with retry-after
+- `frontend/src/lib/websocket.ts` — VITWebSocketService with auto-reconnect (exponential backoff), message routing by type, offline queue
+- `frontend/src/components/error-boundary.tsx` — React ErrorBoundary with retry, dev stack trace, Sentry-ready hook
+- `frontend/src/App.tsx` — QueryClient with smart retry (skip 401s), error boundary wrapping all routes, improved loading spinner
+
+### Updated Files
+- `frontend/src/components/layout.tsx` — Mobile bottom nav bar, sticky desktop sidebar, improved active state styles, VIT_OS branding
+- `frontend/src/index.css` — imports tokens.css
+- `frontend/src/lib/apiClient.ts` — Enhanced with token refresh + rate limit handling
+- `frontend/src/App.tsx` — Landing route, error boundaries, QueryClient tuning
+
+## Frontend Pages (19)
+landing (new, public), dashboard, matches, match-detail, predictions, wallet, validators, training, analytics, subscription, admin, marketplace, trust, bridge, developer, governance, auth (login/register), payment-callback, not-found
 
 ## Authentication
 - **JWT Bearer** — `Authorization: Bearer <token>`

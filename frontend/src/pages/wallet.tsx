@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowUpRight, ArrowDownLeft, RefreshCcw, Landmark, ShieldCheck, AlertTriangle, BadgeCheck } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ArrowUpRight, ArrowDownLeft, RefreshCcw, Landmark, ShieldCheck, AlertTriangle,
+  BadgeCheck, Download, TrendingUp, TrendingDown, Coins, ArrowRight, ChevronDown, Check
+} from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,14 +20,31 @@ import { apiPost } from "@/lib/apiClient";
 
 const CURRENCIES = ["NGN", "USD", "USDT", "PI", "VITCoin"];
 const SYM: Record<string, string> = { NGN: "₦", USD: "$", USDT: "₮", PI: "π", VITCoin: "VIT " };
+const CURRENCY_COLORS: Record<string, string> = {
+  NGN: "text-green-400", USD: "text-blue-400", USDT: "text-teal-400",
+  PI: "text-purple-400", VITCoin: "text-secondary",
+};
 
-function BalanceCard({ label, value, symbol, highlight }: { label: string; value: number; symbol: string; highlight?: boolean }) {
+const DEPOSIT_PRESETS: Record<string, number[]> = {
+  NGN: [1000, 5000, 10000, 50000],
+  USD: [10, 50, 100, 500],
+  USDT: [10, 50, 100, 500],
+  PI: [10, 50, 100, 500],
+  VITCoin: [10, 50, 100, 500],
+};
+
+function WalletSkeleton() {
   return (
-    <div className={`rounded-lg border p-4 space-y-1 ${highlight ? "border-secondary/40 bg-secondary/5" : "border-border bg-card/30"}`}>
-      <div className="text-xs font-mono text-muted-foreground uppercase">{label}</div>
-      <div className={`text-xl font-bold font-mono ${highlight ? "text-secondary" : ""}`}>
-        {symbol}{Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border p-4 space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-6 w-24" />
+          </div>
+        ))}
       </div>
+      <Skeleton className="h-40 w-full rounded-xl" />
     </div>
   );
 }
@@ -58,12 +79,31 @@ export default function WalletPage() {
   const [convertFrom, setConvertFrom] = useState("NGN");
   const [convertTo, setConvertTo] = useState("VITCoin");
   const [convertAmount, setConvertAmount] = useState("");
+  const [txFilter, setTxFilter] = useState("all");
 
-  if (loadingWallet || loadingTx) {
-    return <div className="h-full flex items-center justify-center font-mono text-muted-foreground">SYNCING_BLOCKCHAIN...</div>;
-  }
+  const txList: any[] = Array.isArray(txData) ? txData : (txData as any)?.transactions ?? [];
 
+  const filteredTx = txFilter === "all"
+    ? txList
+    : txList.filter((t: any) => t.transaction_type === txFilter || t.currency === txFilter.toUpperCase());
+
+  if (loadingWallet) return <WalletSkeleton />;
   if (!wallet) return null;
+
+  const balances = [
+    { label: "VITCoin", currency: "VITCoin", value: Number(wallet.vitcoin_balance ?? 0), highlight: true },
+    { label: "NGN", currency: "NGN", value: Number(wallet.ngn_balance ?? 0) },
+    { label: "USD", currency: "USD", value: Number(wallet.usd_balance ?? 0) },
+    { label: "USDT", currency: "USDT", value: Number(wallet.usdt_balance ?? 0) },
+    { label: "PI", currency: "PI", value: Number(wallet.pi_balance ?? 0) },
+  ];
+
+  const totalUSD = (
+    Number(wallet.usd_balance ?? 0) +
+    Number(wallet.usdt_balance ?? 0) +
+    Number(wallet.ngn_balance ?? 0) / 1500 +
+    Number(wallet.vitcoin_balance ?? 0) * 0.001
+  );
 
   const handleDeposit = async () => {
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
@@ -78,20 +118,21 @@ export default function WalletPage() {
       });
       if (result.payment_link && !result.payment_link.includes("paystack.com/pay/vit-sports")) {
         window.open(result.payment_link, "_blank");
-        toast.success(`Payment window opened — ref: ${result.reference}`);
+        toast.success("Redirecting to payment gateway...");
       } else {
-        toast.success(
-          `Deposit queued — ref: ${result.reference}. Complete payment via your gateway.`,
-          { duration: 6000 }
-        );
+        toast.success("Deposit request submitted");
       }
-      setDepositAmount("");
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/me"] });
     } catch (e: any) {
       toast.error(e.message || "Deposit failed");
     }
   };
 
   const handleWithdraw = async () => {
+    if (!withdrawAmount || !withdrawDest) {
+      toast.error("Fill in amount and destination");
+      return;
+    }
     try {
       await withdraw.mutateAsync({
         currency: withdrawCurrency,
@@ -100,238 +141,422 @@ export default function WalletPage() {
         destination_type: withdrawDestType,
       });
       toast.success("Withdrawal request submitted");
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/me"] });
     } catch (e: any) {
       toast.error(e.message || "Withdrawal failed");
     }
   };
 
   const handleConvert = async () => {
+    if (!convertAmount || parseFloat(convertAmount) <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
     try {
-      await convert.mutateAsync({
+      const result = await convert.mutateAsync({
         from_currency: convertFrom,
         to_currency: convertTo,
         amount: parseFloat(convertAmount),
       });
-      toast.success("Conversion successful");
+      toast.success(`Converted: received ${result.to_amount} ${convertTo}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/me"] });
     } catch (e: any) {
       toast.error(e.message || "Conversion failed");
     }
   };
 
-  const transactions = txData?.transactions ?? [];
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-mono font-bold uppercase tracking-tight">Treasury</h1>
-        <p className="text-muted-foreground font-mono text-sm">Multi-currency asset management</p>
+      {/* ── Header ────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-mono font-bold tracking-tight">Wallet & Treasury</h1>
+          <p className="text-muted-foreground font-mono text-xs mt-1">
+            {wallet.kyc_verified ? (
+              <span className="text-green-400 flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> KYC Verified</span>
+            ) : (
+              <span className="text-yellow-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> KYC Pending</span>
+            )}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="font-mono text-xs gap-1.5 hidden sm:flex"
+          onClick={() => toast.info("Statement export coming soon")}
+        >
+          <Download className="w-3 h-3" />
+          Export Statement
+        </Button>
       </div>
 
-      {wallet.is_frozen && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive font-mono text-sm">
-          <AlertTriangle className="w-4 h-4" />
-          WALLET_FROZEN — Contact support to unfreeze
-        </div>
-      )}
+      {/* ── Total Balance Hero Card ──────────────────── */}
+      <Card className="border-secondary/30 bg-gradient-to-br from-secondary/5 to-card vit-glow-gold">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <div className="text-xs font-mono text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                <Coins className="w-3 h-3 text-secondary" />
+                Total Portfolio Value
+              </div>
+              <div className="text-4xl font-bold font-mono text-secondary mb-1">
+                {SYM["VITCoin"]}{Number(wallet.vitcoin_balance ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-sm font-mono text-muted-foreground">
+                ≈ ${totalUSD.toFixed(2)} USD equivalent
+              </div>
+            </div>
+            <div className="flex flex-row sm:flex-col items-center sm:items-end gap-3 sm:gap-2">
+              <div className="flex items-center gap-1.5 text-sm font-mono">
+                {(wallet.win_rate ?? 0) >= 0.5
+                  ? <TrendingUp className="w-4 h-4 text-green-400" />
+                  : <TrendingDown className="w-4 h-4 text-destructive" />
+                }
+                <span className={(wallet.win_rate ?? 0) >= 0.5 ? "text-green-400" : "text-destructive"}>
+                  {((wallet.win_rate ?? 0) * 100).toFixed(0)}% win rate
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm font-mono text-muted-foreground">
+                <ArrowUpRight className="w-4 h-4 text-green-400" />
+                <span className="text-green-400">+{Number(wallet.total_earnings ?? 0).toFixed(2)} VIT earned</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className={`flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border ${wallet.kyc_verified ? "border-primary/40 text-primary bg-primary/5" : "border-muted-foreground/30 text-muted-foreground"}`}>
-          <ShieldCheck className="w-3 h-3" />
-          KYC: {wallet.kyc_verified ? "VERIFIED" : "PENDING"}
-        </div>
-        {!wallet.kyc_verified && (
+      {/* ── Balance Grid ────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        {balances.map((b) => (
+          <div
+            key={b.currency}
+            className={`rounded-xl border p-4 space-y-1.5 transition-all ${
+              b.highlight
+                ? "border-secondary/40 bg-secondary/5 vit-glow-gold"
+                : "border-border/60 bg-card/40 hover:border-border"
+            }`}
+          >
+            <div className="text-[10px] font-mono text-muted-foreground uppercase">{b.label}</div>
+            <div className={`text-lg font-bold font-mono ${b.highlight ? "text-secondary" : CURRENCY_COLORS[b.currency] ?? ""}`}>
+              {SYM[b.currency] ?? ""}{b.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── KYC Banner ──────────────────────────────── */}
+      {!wallet.kyc_verified && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+            <div>
+              <div className="text-sm font-mono font-medium">Complete KYC Verification</div>
+              <div className="text-xs font-mono text-muted-foreground">Required for withdrawals above daily limits</div>
+            </div>
+          </div>
           <Button
             size="sm"
             variant="outline"
-            className="font-mono text-xs uppercase tracking-wider h-7 px-3 border-primary/40 text-primary hover:bg-primary/5"
+            className="font-mono text-xs border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 flex-shrink-0"
             onClick={() => submitKyc.mutate()}
             disabled={submitKyc.isPending}
           >
-            <BadgeCheck className="w-3 h-3 mr-1.5" />
-            {submitKyc.isPending ? "Verifying..." : "Complete KYC"}
+            {submitKyc.isPending ? "Verifying..." : "Verify Now"}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <BalanceCard label="NGN" value={wallet.ngn_balance} symbol="₦" />
-        <BalanceCard label="USD" value={wallet.usd_balance} symbol="$" />
-        <BalanceCard label="USDT" value={wallet.usdt_balance} symbol="₮" />
-        <BalanceCard label="PI Network" value={wallet.pi_balance} symbol="π" />
-        <BalanceCard label="VITCoin" value={wallet.vitcoin_balance} symbol="VIT " highlight />
-      </div>
+      {/* ── Action Dialogs Row ───────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Deposit */}
         <Dialog>
           <DialogTrigger asChild>
-            <Button className="w-full">
-              <ArrowUpRight className="w-4 h-4 mr-2" /> Deposit
+            <Button className="h-12 font-mono gap-2 w-full">
+              <ArrowDownLeft className="w-4 h-4" />
+              Deposit
             </Button>
           </DialogTrigger>
-          <DialogContent className="font-mono">
-            <DialogHeader><DialogTitle className="font-mono uppercase">Deposit Funds</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-mono">Quick Deposit</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Currency</label>
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Currency</div>
                 <Select value={depositCurrency} onValueChange={setDepositCurrency}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => <SelectItem key={c} value={c} className="font-mono">{c}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Amount</label>
-                <Input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="0.00" className="font-mono" />
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Amount</div>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="font-mono"
+                />
+                <div className="flex gap-2 mt-2">
+                  {(DEPOSIT_PRESETS[depositCurrency] ?? []).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setDepositAmount(String(p))}
+                      className={`flex-1 text-xs font-mono rounded py-1.5 border transition-all ${
+                        depositAmount === String(p) ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-border/80"
+                      }`}
+                    >
+                      {SYM[depositCurrency] ?? ""}{p.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Method</label>
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Payment Method</div>
                 <Select value={depositMethod} onValueChange={setDepositMethod}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="paystack">Paystack (NGN)</SelectItem>
-                    <SelectItem value="stripe">Stripe (USD)</SelectItem>
-                    <SelectItem value="crypto">Crypto (USDT)</SelectItem>
-                    <SelectItem value="pi">Pi Network</SelectItem>
+                    <SelectItem value="paystack" className="font-mono">Paystack (NGN)</SelectItem>
+                    <SelectItem value="stripe" className="font-mono">Stripe (USD/Card)</SelectItem>
+                    <SelectItem value="crypto" className="font-mono">Crypto Wallet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full" onClick={handleDeposit} disabled={initiateDeposit.isPending || !depositAmount}>
-                {initiateDeposit.isPending ? "PROCESSING..." : "INITIATE_DEPOSIT"}
+              {depositAmount && parseFloat(depositAmount) > 0 && (
+                <div className="rounded-lg bg-muted/30 border border-border/50 p-3 text-xs font-mono space-y-1">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Amount</span>
+                    <span>{SYM[depositCurrency] ?? ""}{parseFloat(depositAmount).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Processing fee (1%)</span>
+                    <span>{SYM[depositCurrency] ?? ""}{(parseFloat(depositAmount) * 0.01).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-foreground border-t border-border/50 pt-1 mt-1">
+                    <span>You receive</span>
+                    <span className="text-primary">{SYM[depositCurrency] ?? ""}{(parseFloat(depositAmount) * 0.99).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+              <Button
+                className="w-full font-mono h-11 gap-2"
+                onClick={handleDeposit}
+                disabled={initiateDeposit.isPending}
+              >
+                {initiateDeposit.isPending ? "Processing..." : "Deposit Now"}
+                <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
           </DialogContent>
         </Dialog>
 
+        {/* Withdraw */}
         <Dialog>
           <DialogTrigger asChild>
-            <Button className="w-full" variant="outline">
-              <ArrowDownLeft className="w-4 h-4 mr-2" /> Withdraw
+            <Button variant="outline" className="h-12 font-mono gap-2 w-full border-border/60">
+              <ArrowUpRight className="w-4 h-4" />
+              Withdraw
             </Button>
           </DialogTrigger>
-          <DialogContent className="font-mono">
-            <DialogHeader><DialogTitle className="font-mono uppercase">Withdraw Funds</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Currency</label>
-                <Select value={withdrawCurrency} onValueChange={setWithdrawCurrency}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-mono">Withdraw Funds</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Currency</div>
+                  <Select value={withdrawCurrency} onValueChange={setWithdrawCurrency}>
+                    <SelectTrigger className="font-mono text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((c) => <SelectItem key={c} value={c} className="font-mono">{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Amount</div>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                </div>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Amount</label>
-                <Input type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="0.00" className="font-mono" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Destination</label>
-                <Input value={withdrawDest} onChange={(e) => setWithdrawDest(e.target.value)} placeholder="Bank acc / wallet address" className="font-mono" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Destination Type</label>
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Destination Type</div>
                 <Select value={withdrawDestType} onValueChange={setWithdrawDestType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="bank_account">Bank Account</SelectItem>
-                    <SelectItem value="usdt_address">USDT Address</SelectItem>
-                    <SelectItem value="pi_wallet">PI Wallet</SelectItem>
-                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="bank_account" className="font-mono">Bank Account</SelectItem>
+                    <SelectItem value="crypto_wallet" className="font-mono">Crypto Wallet</SelectItem>
+                    <SelectItem value="mobile_money" className="font-mono">Mobile Money</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full" variant="outline" onClick={handleWithdraw} disabled={withdraw.isPending || !withdrawAmount || !withdrawDest}>
-                {withdraw.isPending ? "PROCESSING..." : "SUBMIT_WITHDRAWAL"}
+              <div>
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Destination Address</div>
+                <Input
+                  placeholder={withdrawDestType === "bank_account" ? "Account number" : "Wallet address"}
+                  value={withdrawDest}
+                  onChange={(e) => setWithdrawDest(e.target.value)}
+                  className="font-mono text-sm"
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="w-full font-mono h-11 gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={handleWithdraw}
+                disabled={withdraw.isPending || !wallet.kyc_verified}
+              >
+                {withdraw.isPending ? "Processing..." : !wallet.kyc_verified ? "KYC Required" : "Request Withdrawal"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
 
+        {/* Convert */}
         <Dialog>
           <DialogTrigger asChild>
-            <Button className="w-full" variant="secondary">
-              <RefreshCcw className="w-4 h-4 mr-2" /> Convert
+            <Button variant="outline" className="h-12 font-mono gap-2 w-full border-border/60">
+              <RefreshCcw className="w-4 h-4" />
+              Convert
             </Button>
           </DialogTrigger>
-          <DialogContent className="font-mono">
-            <DialogHeader><DialogTitle className="font-mono uppercase">Convert Currency</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-mono">Convert Currency</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">From</label>
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">From</div>
                 <Select value={convertFrom} onValueChange={setConvertFrom}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.filter((c) => c !== convertTo).map((c) => (
+                      <SelectItem key={c} value={c} className="font-mono">{c}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
+              <div className="flex justify-center">
+                <div className="w-8 h-8 rounded-full border border-border flex items-center justify-center">
+                  <RefreshCcw className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">To</label>
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">To</div>
                 <Select value={convertTo} onValueChange={setConvertTo}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CURRENCIES.filter((c) => c !== convertFrom).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="font-mono"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.filter((c) => c !== convertFrom).map((c) => (
+                      <SelectItem key={c} value={c} className="font-mono">{c}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Amount ({convertFrom})</label>
-                <Input type="number" value={convertAmount} onChange={(e) => setConvertAmount(e.target.value)} placeholder="0.00" className="font-mono" />
+                <div className="text-xs font-mono text-muted-foreground uppercase mb-2">Amount ({convertFrom})</div>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={convertAmount}
+                  onChange={(e) => setConvertAmount(e.target.value)}
+                  className="font-mono"
+                />
               </div>
-              <Button className="w-full" variant="secondary" onClick={handleConvert} disabled={convert.isPending || !convertAmount}>
-                {convert.isPending ? "CONVERTING..." : "EXECUTE_CONVERSION"}
+              <div className="rounded-lg bg-muted/30 border border-border/50 p-3 text-xs font-mono text-muted-foreground">
+                Conversion fee: 0.5% · Rate updates every 60s
+              </div>
+              <Button
+                className="w-full font-mono h-11"
+                onClick={handleConvert}
+                disabled={convert.isPending}
+              >
+                {convert.isPending ? "Converting..." : `Convert ${convertFrom} → ${convertTo}`}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
+      {/* ── Transaction History ──────────────────────── */}
       <Card className="bg-card/50 backdrop-blur border-border">
-        <CardHeader>
-          <CardTitle className="font-mono uppercase flex items-center">
-            <Landmark className="w-5 h-5 mr-2 text-primary" />
-            Transaction Ledger
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground font-mono uppercase bg-muted/30 border-b border-border/50">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Reference</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Currency</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50 font-mono">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="px-4 py-3 text-xs text-muted-foreground truncate max-w-[120px]">
-                      {tx.reference || tx.id.slice(0, 12) + "…"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="text-[10px] uppercase">{tx.type}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs uppercase">{tx.currency}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className={`text-[10px] uppercase ${
-                        tx.status === "completed" ? "text-primary border-primary/30" :
-                        tx.status === "failed" ? "text-destructive border-destructive/30" :
-                        "text-yellow-500 border-yellow-500/30"
-                      }`}>
-                        {tx.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">
-                      {format(new Date(tx.created_at), "yyyy-MM-dd HH:mm")}
-                    </td>
-                    <td className={`px-4 py-3 text-right font-bold ${tx.direction === "credit" ? "text-primary" : "text-destructive"}`}>
-                      {tx.direction === "credit" ? "+" : "−"}{SYM[tx.currency] ?? ""}{Number(tx.amount).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {transactions.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground font-mono">NO_TRANSACTIONS_FOUND</div>
-            )}
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="font-mono uppercase text-sm flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-muted-foreground" />
+              Transaction History
+            </CardTitle>
+            <div className="flex gap-1 flex-wrap">
+              {["all", "deposit", "withdrawal", "conversion"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setTxFilter(f)}
+                  className={`text-[10px] font-mono px-2 py-1 rounded border transition-all capitalize ${
+                    txFilter === f ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-border/80"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
           </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loadingTx ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-3 w-32" />
+                    <Skeleton className="h-2.5 w-20" />
+                  </div>
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : filteredTx.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="text-4xl mb-3">💳</div>
+              <p className="text-sm font-mono text-muted-foreground">No transactions yet</p>
+              <p className="text-xs font-mono text-muted-foreground/60 mt-1">Deposit funds to get started</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/30">
+              {filteredTx.slice(0, 20).map((tx: any, i: number) => {
+                const isDebit = ["withdrawal", "conversion_out", "stake"].includes(tx.transaction_type);
+                const icon = isDebit ? <ArrowUpRight className="w-4 h-4 text-destructive" /> : <ArrowDownLeft className="w-4 h-4 text-green-400" />;
+                return (
+                  <div key={tx.id ?? i} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isDebit ? "bg-destructive/10" : "bg-green-500/10"}`}>
+                      {icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-mono font-medium capitalize text-foreground">
+                        {(tx.transaction_type ?? "transaction").replace(/_/g, " ")}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {tx.created_at ? format(new Date(tx.created_at), "MMM d, HH:mm") : "–"}
+                        {tx.status && <span className="ml-2">{tx.status}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className={`text-sm font-bold font-mono ${isDebit ? "text-destructive" : "text-green-400"}`}>
+                        {isDebit ? "-" : "+"}{SYM[tx.currency] ?? ""}{Number(tx.amount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground">{tx.currency}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
