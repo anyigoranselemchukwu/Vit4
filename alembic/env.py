@@ -11,6 +11,18 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from app.db.models import Base
+import app.db.models
+import app.modules.wallet.models
+import app.modules.blockchain.models
+import app.modules.training.models
+import app.modules.ai.models
+import app.data.models
+import app.modules.notifications.models
+import app.modules.marketplace.models
+import app.modules.trust.models
+import app.modules.bridge.models
+import app.modules.developer.models
+import app.modules.governance.models
 from app.db.database import DATABASE_URL
 
 config = context.config

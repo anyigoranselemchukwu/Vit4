@@ -4,7 +4,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,6 @@ from app.api.deps import get_current_user
 from app.db.database import get_db
 from app.db.models import User
 from app.modules.notifications.service import NotificationService
-from app.modules.notifications.websocket import notification_ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -125,37 +124,3 @@ async def update_preferences(
         "in_app_enabled":      prefs.in_app_enabled,
     }
 
-
-# ── WebSocket ──────────────────────────────────────────────────────────────────
-
-@router.websocket("/ws/{user_id}")
-async def notifications_ws(
-    websocket: WebSocket,
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Real-time notification stream.
-    Connect: ws://<host>/api/notifications/ws/<user_id>
-    Receives: JSON notification payloads pushed by the server.
-    Sends:    {"action": "ping"} → {"action": "pong"}
-    """
-    await notification_ws_manager.connect(user_id, websocket)
-    try:
-        count = await NotificationService.unread_count(db, user_id)
-        await websocket.send_json({"action": "connected", "unread_count": count})
-
-        while True:
-            data = await websocket.receive_json()
-            if data.get("action") == "ping":
-                await websocket.send_json({"action": "pong"})
-            elif data.get("action") == "mark_read":
-                nid = data.get("notification_id")
-                if nid:
-                    await NotificationService.mark_read(db, user_id, nid)
-                    await websocket.send_json({"action": "marked_read", "notification_id": nid})
-    except WebSocketDisconnect:
-        notification_ws_manager.disconnect(user_id, websocket)
-    except Exception as e:
-        logger.error(f"Notification WS error user_id={user_id}: {e}")
-        notification_ws_manager.disconnect(user_id, websocket)

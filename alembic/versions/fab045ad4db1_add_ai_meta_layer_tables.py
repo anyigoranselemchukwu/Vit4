@@ -20,6 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    is_sqlite = bind.dialect.name == "sqlite"
+    ts = 'CURRENT_TIMESTAMP' if is_sqlite else 'now()'
+
     # Add external_id to matches table
     op.add_column('matches', sa.Column('external_id', sa.String(), nullable=True))
     op.create_index('idx_matches_external_id', 'matches', ['external_id'], unique=True)
@@ -36,7 +40,7 @@ def upgrade() -> None:
         sa.Column('reason', sa.String(length=500), nullable=True),
         sa.Column('model_version', sa.String(length=50), nullable=True),
         sa.Column('is_certified', sa.Boolean(), nullable=True),
-        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text(ts), nullable=True),
         sa.Column('was_correct', sa.Boolean(), nullable=True),
         sa.Column('calibration_error', sa.Float(), nullable=True),
         sa.ForeignKeyConstraint(['match_id'], ['matches.id'], ),
@@ -77,7 +81,7 @@ def upgrade() -> None:
         sa.Column('weighted_draw', sa.Float(), nullable=False),
         sa.Column('weighted_away', sa.Float(), nullable=False),
         sa.Column('per_ai_predictions', sa.JSON(), nullable=True),
-        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text(ts), nullable=True),
         sa.ForeignKeyConstraint(['match_id'], ['matches.id'], ),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('match_id')

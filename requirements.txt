@@ -106,3 +106,8 @@ scikit-learn==1.6.1
 SQLAlchemy[asyncio]==2.0.36
 stripe==11.4.0
 tenacity==9.0.0
+coverage
+pytest
+pytest-asyncio
+starlette
+pytest-cov

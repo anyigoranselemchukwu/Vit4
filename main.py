@@ -2,21 +2,26 @@
 # Full Integration: AI + Wallet + Blockchain + Training
 
 import asyncio
+import logging
 import os
+import time
 import uuid
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func
 
 from fastapi.middleware.gzip import GZipMiddleware
 from app.config import get_env, APP_VERSION, print_config_status
-from app.db.database import engine, Base, get_db, _is_sqlite
+from app.core.errors import AppError, error_response
+from app.db.database import get_db
 import app.db.models  # ensure all models registered
 import app.modules.wallet.models  # register wallet models with SQLAlchemy
 import app.modules.blockchain.models  # register blockchain models with SQLAlchemy
@@ -73,6 +78,7 @@ from app.core.cache import cache_background_purge_loop
 
 # ===== NOTIFICATION ROUTES (Module K) =====
 from app.modules.notifications.routes import router as notifications_router
+from app.modules.notifications.websocket import router as notifications_ws_router
 
 # ===== MARKETPLACE ROUTES (Module G) =====
 from app.modules.marketplace.routes import router as marketplace_router
@@ -111,6 +117,8 @@ from app.services.results_settler import settle_results
 
 load_dotenv()
 
+logger = logging.getLogger("uvicorn.error")
+
 # ============================================
 # BACKGROUND TASKS
 # ============================================
@@ -118,6 +126,74 @@ load_dotenv()
 _SETTLEMENT_INTERVAL_HOURS = 6
 _ACCOUNTABILITY_INTERVAL_HOURS = 24
 _VITCOIN_PRICING_INTERVAL_HOURS = 6
+
+
+class BackgroundTaskSupervisor:
+    def __init__(self, task_specs, check_interval: int = 30, max_restarts: int = 5):
+        self.task_specs = task_specs
+        self.check_interval = check_interval
+        self.max_restarts = max_restarts
+        self.tasks = {}
+        self.restart_counts = {name: 0 for name, _ in task_specs}
+        self.last_started_at = {}
+        self.monitor_task = None
+        self.stopping = False
+
+    def start(self):
+        for name, factory in self.task_specs:
+            self._start_task(name, factory)
+        self.monitor_task = asyncio.create_task(self._monitor(), name="background-supervisor")
+        logger.info("[supervisor] started with tasks=%s", ", ".join(self.tasks.keys()))
+
+    def _start_task(self, name, factory):
+        task = asyncio.create_task(factory(), name=name)
+        self.tasks[name] = task
+        self.last_started_at[name] = time.time()
+        logger.info("[supervisor] task started name=%s", name)
+
+    async def _monitor(self):
+        while not self.stopping:
+            await asyncio.sleep(self.check_interval)
+            for name, factory in self.task_specs:
+                task = self.tasks.get(name)
+                if task and not task.done():
+                    continue
+                if self.restart_counts[name] >= self.max_restarts:
+                    logger.critical("[supervisor] task restart limit reached name=%s restarts=%s", name, self.restart_counts[name])
+                    continue
+                if task:
+                    try:
+                        exc = task.exception()
+                    except asyncio.CancelledError:
+                        exc = None
+                    if exc:
+                        logger.error("[supervisor] task failed name=%s error=%s", name, exc, exc_info=exc)
+                    else:
+                        logger.warning("[supervisor] task exited name=%s", name)
+                self.restart_counts[name] += 1
+                logger.warning("[supervisor] restarting task name=%s attempt=%s", name, self.restart_counts[name])
+                self._start_task(name, factory)
+
+    async def stop(self):
+        self.stopping = True
+        all_tasks = list(self.tasks.values())
+        if self.monitor_task:
+            all_tasks.append(self.monitor_task)
+        for task in all_tasks:
+            task.cancel()
+        await asyncio.gather(*all_tasks, return_exceptions=True)
+        logger.info("[supervisor] stopped")
+
+    def snapshot(self):
+        return {
+            name: {
+                "running": bool(task and not task.done()),
+                "done": bool(task and task.done()),
+                "restarts": self.restart_counts.get(name, 0),
+                "last_started_at": self.last_started_at.get(name),
+            }
+            for name, task in self.tasks.items()
+        }
 
 
 async def auto_settle_loop():
@@ -187,10 +263,7 @@ async def lifespan(app: FastAPI):
     print_config_status()
     print(f"🚀 VIT Network v{APP_VERSION} starting...")
 
-    # DB INIT
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("✅ Database ready")
+    print("✅ Database migrations applied")
 
     # SEED PLATFORM CONFIG DEFAULTS
     try:
@@ -411,24 +484,35 @@ async def lifespan(app: FastAPI):
     if alerts and alerts.enabled:
         await alerts.send_startup_message()
 
-    # BACKGROUND TASKS
+    supervised_tasks = [
+        ("etl-pipeline", etl_pipeline_loop),
+        ("odds-refresh", odds_refresh_loop),
+        ("cache-purge", lambda: cache_background_purge_loop(300)),
+    ]
+    supervisor = BackgroundTaskSupervisor(
+        supervised_tasks,
+        check_interval=int(get_env("BACKGROUND_TASK_CHECK_INTERVAL_SECONDS", "30")),
+        max_restarts=int(get_env("BACKGROUND_TASK_MAX_RESTARTS", "5")),
+    )
+    supervisor.start()
+    app.state.background_supervisor = supervisor
+
     tasks = [
-        asyncio.create_task(auto_settle_loop()),
-        asyncio.create_task(model_accountability_loop()),
-        asyncio.create_task(vitcoin_pricing_loop()),
-        asyncio.create_task(etl_pipeline_loop()),               # Module F: full ETL every 6h
-        asyncio.create_task(odds_refresh_loop()),                # Module F: odds refresh every 15m
-        asyncio.create_task(subscription_expiry_loop()),        # Module K: subscription expiry warnings
-        asyncio.create_task(cache_background_purge_loop(300)),  # Purge expired cache entries every 5m
+        asyncio.create_task(auto_settle_loop(), name="auto-settle"),
+        asyncio.create_task(model_accountability_loop(), name="model-accountability"),
+        asyncio.create_task(vitcoin_pricing_loop(), name="vitcoin-pricing"),
+        asyncio.create_task(subscription_expiry_loop(), name="subscription-expiry"),
     ]
 
-    print("✅ Background services started")
+    print("✅ Background services started with supervision")
     print("🌐 API running at http://localhost:5000")
 
     yield
 
+    await supervisor.stop()
     for task in tasks:
         task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
     print("🛑 Shutdown complete")
 
@@ -463,6 +547,104 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = (
+        request.headers.get("X-Request-ID")
+        or request.headers.get("X-Correlation-ID")
+        or str(uuid.uuid4())
+    )
+    request.state.request_id = request_id
+    try:
+        response = await call_next(request)
+    except Exception:
+        logging.getLogger("app.errors").exception(
+            "Unhandled request failure request_id=%s method=%s path=%s",
+            request_id,
+            request.method,
+            request.url.path,
+        )
+        raise
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Correlation-ID"] = request_id
+    return response
+
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    logging.getLogger("app.errors").warning(
+        "Application error request_id=%s status=%s code=%s method=%s path=%s message=%s",
+        getattr(request.state, "request_id", "unknown"),
+        exc.status_code,
+        exc.code,
+        request.method,
+        request.url.path,
+        exc.message,
+    )
+    return error_response(
+        request=request,
+        status_code=exc.status_code,
+        code=exc.code,
+        message=exc.message,
+        details=exc.details,
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    detail = exc.detail if isinstance(exc.detail, str) else "HTTP error"
+    logging.getLogger("app.errors").warning(
+        "HTTP error request_id=%s status=%s method=%s path=%s detail=%s",
+        getattr(request.state, "request_id", "unknown"),
+        exc.status_code,
+        request.method,
+        request.url.path,
+        detail,
+    )
+    return error_response(
+        request=request,
+        status_code=exc.status_code,
+        code="http_error",
+        message=detail,
+        details=None if isinstance(exc.detail, str) else exc.detail,
+        headers=dict(exc.headers or {}),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    logging.getLogger("app.errors").warning(
+        "Validation error request_id=%s method=%s path=%s errors=%s",
+        getattr(request.state, "request_id", "unknown"),
+        request.method,
+        request.url.path,
+        exc.errors(),
+    )
+    return error_response(
+        request=request,
+        status_code=422,
+        code="validation_error",
+        message="Request validation failed",
+        details=exc.errors(),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    logging.getLogger("app.errors").exception(
+        "Unhandled exception request_id=%s method=%s path=%s",
+        getattr(request.state, "request_id", "unknown"),
+        request.method,
+        request.url.path,
+    )
+    return error_response(
+        request=request,
+        status_code=500,
+        code="internal_server_error",
+        message="Internal server error",
+    )
 
 
 # ============================================
@@ -508,6 +690,7 @@ app.include_router(pipeline_router)
 
 # Notifications (Module K)
 app.include_router(notifications_router)
+app.include_router(notifications_ws_router)
 
 # Marketplace (Module G)
 app.include_router(marketplace_router)
@@ -528,15 +711,6 @@ app.include_router(governance_router)
 # ============================================
 # UTILITIES
 # ============================================
-
-@app.middleware("http")
-async def add_request_id(request: Request, call_next):
-    request_id = str(uuid.uuid4())[:8]
-    request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    return response
-
 
 # ============================================
 # HEALTH

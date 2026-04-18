@@ -5,9 +5,13 @@ import asyncio
 import logging
 from typing import Dict, List
 
-from fastapi import WebSocket
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 
 class NotificationConnectionManager:
@@ -46,3 +50,32 @@ class NotificationConnectionManager:
 
 
 notification_ws_manager = NotificationConnectionManager()
+
+
+@router.websocket("/ws/{user_id}")
+async def notifications_ws(
+    websocket: WebSocket,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.modules.notifications.service import NotificationService
+
+    await notification_ws_manager.connect(user_id, websocket)
+    try:
+        count = await NotificationService.unread_count(db, user_id)
+        await websocket.send_json({"action": "connected", "unread_count": count})
+
+        while True:
+            data = await websocket.receive_json()
+            if data.get("action") == "ping":
+                await websocket.send_json({"action": "pong"})
+            elif data.get("action") == "mark_read":
+                nid = data.get("notification_id")
+                if nid:
+                    await NotificationService.mark_read(db, user_id, nid)
+                    await websocket.send_json({"action": "marked_read", "notification_id": nid})
+    except WebSocketDisconnect:
+        notification_ws_manager.disconnect(user_id, websocket)
+    except Exception as exc:
+        logger.error("Notification WS error user_id=%s error=%s", user_id, exc)
+        notification_ws_manager.disconnect(user_id, websocket)

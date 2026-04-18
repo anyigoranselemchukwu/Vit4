@@ -23,7 +23,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/auth": "http://localhost:8000",
-      "/api": "http://localhost:8000",
+      "/api": { target: "http://localhost:8000", ws: true },
       "/predict": "http://localhost:8000",
       "/history": "http://localhost:8000",
       "/result": "http://localhost:8000",

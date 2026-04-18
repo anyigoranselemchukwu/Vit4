@@ -6,7 +6,7 @@ import time
 from collections import defaultdict, deque
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from app.core.errors import error_response
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -53,10 +53,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if len(bucket) >= limit:
             retry_after = int(self.WINDOW_SECONDS - (now - bucket[0])) + 1
-            return JSONResponse(
+            return error_response(
+                request=request,
                 status_code=429,
-                content={
-                    "detail": "Rate limit exceeded. Please slow down.",
+                code="rate_limit_exceeded",
+                message="Rate limit exceeded. Please slow down.",
+                details={
                     "limit": limit,
                     "window_seconds": self.WINDOW_SECONDS,
                     "retry_after": retry_after,

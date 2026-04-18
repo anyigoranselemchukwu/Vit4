@@ -3,8 +3,8 @@
 import os
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
 from dotenv import load_dotenv
+from app.core.errors import error_response
 
 load_dotenv()
 
@@ -73,22 +73,31 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             token = auth_header[7:]
             if _is_valid_jwt(token):
                 return await call_next(request)
-            return JSONResponse(
+            return error_response(
+                request=request,
                 status_code=401,
-                content={"detail": "Invalid or expired JWT token"}
+                code="invalid_token",
+                message="Invalid or expired JWT token",
             )
 
         # ── Fall back to API key ────────────────────────────────────────
         api_key = request.headers.get("x-api-key")
         if not api_key:
-            return JSONResponse(
+            return error_response(
+                request=request,
                 status_code=401,
-                content={"detail": "Authentication required. Provide Authorization: Bearer <token> or x-api-key header"}
+                code="authentication_required",
+                message="Authentication required. Provide Authorization: Bearer <token> or x-api-key header",
             )
 
         expected = os.getenv("API_KEY", API_KEY)
         if api_key != expected:
-            return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
+            return error_response(
+                request=request,
+                status_code=401,
+                code="invalid_api_key",
+                message="Invalid API key",
+            )
 
         return await call_next(request)
 

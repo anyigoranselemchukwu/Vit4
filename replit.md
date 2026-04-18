@@ -8,7 +8,7 @@ A full-stack sports prediction platform combining a 12-model ML ensemble with AI
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui on port 5000
 - **Database**: SQLite (dev) / PostgreSQL (prod) via SQLAlchemy async — auto-migrates on start
 - **Auth**: JWT Bearer (`Authorization: Bearer <token>`) + legacy x-api-key support
-- **Background Tasks**: Async loops — auto-settlement, model accountability, ETL pipeline, odds refresh, notification expiry, cache purge
+- **Background Tasks**: Supervised async loops for ETL, odds refresh, and cache purge; direct async loops for auto-settlement, model accountability, pricing, and subscription expiry
 
 ## Running the App
 ```bash
@@ -35,7 +35,8 @@ bash scripts/start_fullstack.sh
 ## Key Files
 - `main.py` — FastAPI entry point, all 16+ routers, lifespan, background tasks
 - `frontend/` — React TypeScript SPA (17 pages, wouter routing, shadcn/ui)
-- `requirements.txt` — Python dependencies (clean, deduplicated)
+- `requirements.txt` — Python dependencies plus pytest/coverage tooling
+- `tests/` — initial pytest smoke suite with coverage target
 - `app/modules/` — All feature modules (wallet, blockchain, ai, training, notifications, marketplace, trust, bridge, developer, governance)
 - `app/data/` — ETL pipeline, real-time data, feature engineering
 - `app/auth/` — JWT auth (jwt_utils.py, routes.py, dependencies.py)
@@ -67,7 +68,7 @@ dashboard, matches, match-detail, predictions, wallet, validators, training, ana
 - `REFRESH_TOKEN_EXPIRE_DAYS` — refresh TTL (default: 30)
 
 ## Database
-SQLite dev (`vit.db`), PostgreSQL in production. All tables auto-created on startup via `Base.metadata.create_all`.
+SQLite dev (`vit.db`), PostgreSQL in production. Schema is managed by Alembic migrations on startup; `Base.metadata.create_all` is no longer used during app startup.
 
 Core tables: matches, predictions, clv_entries, edges, model_performances, bankroll_states, decision_logs, teams, ai_predictions, ai_performances, ai_signal_cache, subscription_plans, user_subscriptions, audit_logs, training_datasets, users, training_jobs, training_guide_steps
 
