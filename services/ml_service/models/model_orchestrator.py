@@ -27,7 +27,10 @@ import logging
 import math
 import os
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple 
+# Phase B: Feature flags and model loader
+from app.core.feature_flags import FeatureFlags
+from services.ml_service.model_loader import ModelLoader
 
 logger = logging.getLogger(__name__)
 
@@ -608,29 +611,29 @@ class ModelOrchestrator:
             cls = _MODEL_CLASS_MAP.get(key, _BaseModel)
             model_obj = cls(key, markets, sigma, market_trust)
 
-            # If a trained pkl exists, attach the sklearn model to the instance
+            # If a trained pkl exists AND feature flag enabled, attach the sklearn model
             loaded = False
-            if os.path.exists(pkl_path):
-                try:
-                    import joblib
-                    payload = joblib.load(pkl_path)
-                    if isinstance(payload, dict) and "model" in payload:
-                        model_obj._sklearn_model    = payload["model"]
-                        model_obj._sklearn_scaler   = payload.get("scaler")
-                        model_obj._sklearn_features = payload.get("feature_columns", [])
-                        model_obj._sklearn_version  = payload.get("version", "?")
+            if FeatureFlags.is_enabled("USE_REAL_ML_MODELS"):
+                real_model = ModelLoader.load_model(key)
+                if real_model is not None:
+                    try:
+                        model_obj._sklearn_model    = real_model["model"]
+                        model_obj._sklearn_scaler   = real_model.get("scaler")
+                        model_obj._sklearn_features = real_model.get("feature_columns", [])
+                        model_obj._sklearn_version  = real_model.get("version", "?")
                         model_obj.is_trained        = True
-                        model_obj.trained_matches_count = payload.get("training_samples", 1)
+                        model_obj.trained_matches_count = real_model.get("training_samples", 1)
                         loaded = True
                         logger.info(
                             f"✅ Loaded real weights for {key} "
-                            f"(acc={payload.get('metrics',{}).get('accuracy','?')}, "
-                            f"samples={payload.get('training_samples','?')})"
+                            f"(acc={real_model.get('metrics',{}).get('accuracy','?')}, "
+                            f"samples={real_model.get('training_samples','?')})"
                         )
-                    else:
-                        logger.warning(f"Unexpected pkl format for {key} — using algorithmic model")
-                except Exception as exc:
-                    logger.warning(f"Failed to load {key}.pkl: {exc}")
+                    except Exception as exc:
+                        logger.warning(f"Failed to attach sklearn model for {key}: {exc}")
+                        loaded = False
+            else:
+                logger.debug(f"USE_REAL_ML_MODELS disabled — using algorithmic model for {key}")
 
             self._pkl_loaded[key] = loaded
             # Real-weights models get 2× vote weight in the ensemble
@@ -653,6 +656,9 @@ class ModelOrchestrator:
             f"Orchestrator ready: {len(self.models)}/{_TOTAL_MODEL_SPECS} models "
             f"({n_pkl} with real trained weights)"
         )
+                # Log which mode is active
+        mode_str = "🧠 Real trained models" if FeatureFlags.is_enabled("USE_REAL_ML_MODELS") else "🎲 Noise-based algorithmic models"
+        logger.info(f"ML Model Mode: {mode_str}")
         return results
 
     def _sklearn_predict(self, model_obj, lam_h: float, lam_a: float,
