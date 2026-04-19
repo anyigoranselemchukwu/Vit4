@@ -1275,7 +1275,8 @@ async def admin_fetch_and_store_fixtures(
         return {"stored": 0, "message": "FOOTBALL_DATA_API_KEY not configured"}
 
     now = datetime.now(timezone.utc)
-    date_from = now.strftime("%Y-%m-%d")
+    tomorrow = now + timedelta(days=1)
+    date_from = tomorrow.strftime("%Y-%m-%d")
     date_to = (now + timedelta(days=days)).strftime("%Y-%m-%d")
 
     stored = 0

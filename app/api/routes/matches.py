@@ -59,12 +59,14 @@ async def get_upcoming_matches(
 ):
     now = datetime.utcnow()
     future = now + timedelta(days=days)
+    # Include matches that started up to 3 hours ago but aren't settled yet
+    recent_cutoff = now - timedelta(hours=3)
 
     q = select(Match).where(
         and_(
-            Match.kickoff_time >= now,
+            Match.kickoff_time >= recent_cutoff,
             Match.kickoff_time <= future,
-            or_(Match.status == "upcoming", Match.status == "SCHEDULED", Match.status.is_(None)),
+            Match.actual_outcome.is_(None),
         )
     )
     if league:
@@ -103,13 +105,14 @@ async def explore_matches(
 ):
     now = datetime.utcnow()
     future = now + timedelta(days=days)
+    recent_cutoff = now - timedelta(hours=3)
 
     q = (
         select(Match, Prediction)
         .outerjoin(Prediction, Match.id == Prediction.match_id)
-        .where(Match.kickoff_time >= now)
+        .where(Match.kickoff_time >= recent_cutoff)
         .where(Match.kickoff_time <= future)
-        .where(or_(Match.status == "upcoming", Match.status == "SCHEDULED", Match.status.is_(None)))
+        .where(Match.actual_outcome.is_(None))
     )
     if league:
         q = q.where(Match.league.ilike(f"%{league}%"))
@@ -162,32 +165,34 @@ async def get_live_matches(db: AsyncSession = Depends(get_db)):
 
 @router.get("/recent")
 async def get_recent_matches(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.utcnow()
+    # Show: unsettled matches (kicked off up to 3h ago → future), ordered soonest first
+    recent_cutoff = now - timedelta(hours=3)
 
-    # Try: recently-added upcoming fixtures (no prediction required)
-    upcoming_q = (
+    q = (
         select(Match, Prediction)
         .outerjoin(Prediction, Match.id == Prediction.match_id)
-        .where(Match.kickoff_time >= now)
-        .where(or_(Match.status == "upcoming", Match.status == "SCHEDULED", Match.status.is_(None)))
+        .where(Match.actual_outcome.is_(None))
+        .where(Match.kickoff_time >= recent_cutoff)
         .order_by(Match.kickoff_time.asc())
         .limit(limit)
     )
-    result = await db.execute(upcoming_q)
+    result = await db.execute(q)
     rows = result.all()
 
-    # Fallback: matches with predictions ordered by recency
+    # Fallback: show all unsettled matches regardless of date
     if not rows:
-        pred_q = (
+        q2 = (
             select(Match, Prediction)
             .outerjoin(Prediction, Match.id == Prediction.match_id)
-            .order_by(Match.kickoff_time.desc())
+            .where(Match.actual_outcome.is_(None))
+            .order_by(Match.kickoff_time.asc())
             .limit(limit)
         )
-        result = await db.execute(pred_q)
+        result = await db.execute(q2)
         rows = result.all()
 
     seen: set = set()
