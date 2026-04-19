@@ -53,8 +53,8 @@ def _fmt_match(m: Match, pred: Optional[Prediction] = None) -> dict:
 @router.get("/upcoming")
 async def get_upcoming_matches(
     league: Optional[str] = Query(None),
-    days: int = Query(7, ge=1, le=30),
-    limit: int = Query(50, ge=1, le=200),
+    days: int = Query(14, ge=1, le=60),
+    limit: int = Query(100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.utcnow()
@@ -97,8 +97,8 @@ async def explore_matches(
     league: Optional[str] = Query(None),
     min_edge: float = Query(0.0, ge=0),
     min_confidence: float = Query(0.0, ge=0, le=1),
-    days: int = Query(7, ge=1, le=30),
-    limit: int = Query(50, ge=1, le=200),
+    days: int = Query(14, ge=1, le=60),
+    limit: int = Query(100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.utcnow()
@@ -165,14 +165,30 @@ async def get_recent_matches(
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    q = (
+    now = datetime.utcnow()
+
+    # Try: recently-added upcoming fixtures (no prediction required)
+    upcoming_q = (
         select(Match, Prediction)
-        .join(Prediction, Match.id == Prediction.match_id)
-        .order_by(Prediction.timestamp.desc())
+        .outerjoin(Prediction, Match.id == Prediction.match_id)
+        .where(Match.kickoff_time >= now)
+        .where(or_(Match.status == "upcoming", Match.status == "SCHEDULED", Match.status.is_(None)))
+        .order_by(Match.kickoff_time.asc())
         .limit(limit)
     )
-    result = await db.execute(q)
+    result = await db.execute(upcoming_q)
     rows = result.all()
+
+    # Fallback: matches with predictions ordered by recency
+    if not rows:
+        pred_q = (
+            select(Match, Prediction)
+            .outerjoin(Prediction, Match.id == Prediction.match_id)
+            .order_by(Match.kickoff_time.desc())
+            .limit(limit)
+        )
+        result = await db.execute(pred_q)
+        rows = result.all()
 
     seen: set = set()
     formatted = []

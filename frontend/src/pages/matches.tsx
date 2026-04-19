@@ -43,49 +43,53 @@ export default function MatchesPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between gap-4 sm:items-center">
-        <div>
-          <h1 className="text-3xl font-mono font-bold uppercase tracking-tight">Intelligence Feed</h1>
-          <p className="text-muted-foreground font-mono text-sm">
-            {upcoming.length > 0
-              ? `${upcoming.length} upcoming fixtures loaded`
-              : recent.length > 0
-              ? `${recent.length} recent predictions loaded`
-              : "Real-time match data & ML consensus"}
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* ── Header ──────────────────────────────────────── */}
+      <div>
+        <h1 className="text-3xl font-mono font-bold uppercase tracking-tight">Intelligence Feed</h1>
+        <p className="text-muted-foreground font-mono text-sm">
+          {upcoming.length > 0
+            ? `${upcoming.length} upcoming fixtures loaded`
+            : recent.length > 0
+            ? `${recent.length} fixtures available`
+            : "Real-time match data & ML consensus"}
+        </p>
+      </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="SEARCH_TEAMS"
-              className="pl-9 font-mono bg-card/50"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+      {/* ── Filters ─────────────────────────────────────── */}
+      <div className="space-y-2">
+        {/* Search — always full width */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search teams or league…"
+            className="pl-9 font-mono bg-card/50"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {/* Dropdowns — side-by-side even on mobile */}
+        <div className="flex gap-2">
           <Select value={leagueFilter} onValueChange={setLeagueFilter}>
-            <SelectTrigger className="w-[180px] font-mono bg-card/50">
-              <SelectValue placeholder="ALL_LEAGUES" />
+            <SelectTrigger className="flex-1 font-mono bg-card/50 text-xs">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">ALL_LEAGUES</SelectItem>
+              <SelectItem value="all">All Leagues</SelectItem>
               {leagues.map((lg) => (
-                <SelectItem key={lg} value={lg}>{lg.replace(/_/g, " ").toUpperCase()}</SelectItem>
+                <SelectItem key={lg} value={lg}>{lg.replace(/_/g, " ")}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px] font-mono bg-card/50">
-              <SelectValue placeholder="FILTER_STATUS" />
+            <SelectTrigger className="flex-1 font-mono bg-card/50 text-xs">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">ALL_MATCHES</SelectItem>
-              <SelectItem value="upcoming">UPCOMING</SelectItem>
-              <SelectItem value="live">LIVE</SelectItem>
-              <SelectItem value="completed">COMPLETED</SelectItem>
+              <SelectItem value="all">All Matches</SelectItem>
+              <SelectItem value="upcoming">Upcoming</SelectItem>
+              <SelectItem value="live">Live</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
             </SelectContent>
           </Select>
         </div>

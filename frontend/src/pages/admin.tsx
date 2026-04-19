@@ -121,9 +121,14 @@ function DashboardTab() {
     onError: () => toast.error("Backup failed"),
   });
   const fetchFixtures = useMutation({
-    mutationFn: () => apiPost("/admin/matches/fetch-fixtures", { count: 20 }),
-    onSuccess: (d: any) => toast.success(`Pipeline: fetched ${d.stored ?? 0} fixtures`),
-    onError: () => toast.error("Fixture fetch failed"),
+    mutationFn: () => apiPost("/admin/matches/fetch-fixtures?count=50&days=14", {}),
+    onSuccess: (d: any) => {
+      toast.success(`Pipeline: fetched ${d.stored ?? 0} new fixtures (${d.skipped_existing ?? 0} already existed)`);
+      qc.invalidateQueries({ queryKey: ["/matches/upcoming"] });
+      qc.invalidateQueries({ queryKey: ["matches-recent"] });
+      qc.invalidateQueries({ queryKey: ["admin-stats"] });
+    },
+    onError: () => toast.error("Fixture fetch failed — check Football API key in settings"),
   });
 
   const kpis = [
