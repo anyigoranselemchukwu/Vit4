@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/apiClient";
 import { useAuth } from "@/lib/auth";
+import { useGetTopOpportunities, useGetModelConfidence } from "@/api-client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -55,35 +56,59 @@ function ActivityItemSkeleton() {
 
 /* ── AI Confidence Widget ─────────────────────────────── */
 function AIConfidenceWidget() {
-  const models = [
-    { name: "Random Forest", conf: 88, accuracy: 74 },
-    { name: "XGBoost",       conf: 84, accuracy: 72 },
-    { name: "LSTM Neural",   conf: 79, accuracy: 71 },
-    { name: "Gradient Boost",conf: 82, accuracy: 73 },
-  ];
+  const { data, isLoading } = useGetModelConfidence();
+  const displayModels = data?.models?.slice(0, 6) ?? [];
+  const ensembleAccuracy = data?.ensemble_accuracy ?? 0;
+  const activeCount = data?.active_count ?? 0;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-1">
+            <div className="flex justify-between">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (displayModels.length === 0) {
+    return (
+      <div className="text-center py-4 text-xs font-mono text-muted-foreground">
+        No model data yet — run a prediction to populate.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      {models.map((m) => (
-        <div key={m.name}>
+      {displayModels.map((m) => (
+        <div key={m.key}>
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs font-mono text-muted-foreground">{m.name}</span>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-muted-foreground/60">{m.accuracy}% hist.</span>
-              <span className="text-xs font-mono text-primary font-bold">{m.conf}%</span>
+              {m.predictions > 0 && (
+                <span className="text-[10px] font-mono text-muted-foreground/60">{m.predictions} pred.</span>
+              )}
+              <span className="text-xs font-mono text-primary font-bold">{m.accuracy.toFixed(1)}%</span>
             </div>
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-700"
-              style={{ width: `${m.conf}%` }}
+              style={{ width: `${Math.min(m.accuracy, 100)}%` }}
             />
           </div>
         </div>
       ))}
       <div className="pt-2 border-t border-border/50 flex items-center justify-between">
-        <span className="text-xs font-mono text-muted-foreground">Ensemble</span>
-        <span className="text-base font-bold font-mono text-primary">83.3%</span>
+        <span className="text-xs font-mono text-muted-foreground">Ensemble ({activeCount} models)</span>
+        <span className="text-base font-bold font-mono text-primary">{ensembleAccuracy.toFixed(1)}%</span>
       </div>
     </div>
   );
@@ -91,24 +116,55 @@ function AIConfidenceWidget() {
 
 /* ── Top Opportunities Widget ─────────────────────────── */
 function TopOpportunitiesWidget() {
-  const opportunities = [
-    { match: "Man City vs Chelsea",    edge: "+8.4%", ai: 87, time: "Today 20:00" },
-    { match: "PSG vs Lyon",           edge: "+6.1%", ai: 82, time: "Tomorrow" },
-    { match: "Bayern vs Dortmund",    edge: "+11.2%", ai: 91, time: "Today 17:30" },
-  ];
+  const { data, isLoading } = useGetTopOpportunities(5);
+  const opportunities = data?.opportunities ?? [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg border border-border/40">
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-40" />
+              <Skeleton className="h-2.5 w-20" />
+            </div>
+            <div className="space-y-1 text-right">
+              <Skeleton className="h-3 w-12 ml-auto" />
+              <Skeleton className="h-2.5 w-10 ml-auto" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (opportunities.length === 0) {
+    return (
+      <div className="space-y-2">
+        <div className="text-center py-6 text-xs font-mono text-muted-foreground">
+          No live opportunities — make predictions to find value bets.
+        </div>
+        <Link href="/matches">
+          <Button variant="ghost" size="sm" className="w-full font-mono text-xs text-muted-foreground gap-1">
+            Browse matches <ChevronRight className="w-3 h-3" />
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
       {opportunities.map((o) => (
-        <Link key={o.match} href="/matches">
+        <Link key={o.prediction_id} href={`/matches/${o.match_id}`}>
           <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/40 hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group">
             <div className="flex-1 min-w-0">
               <div className="text-xs font-mono font-medium truncate text-foreground group-hover:text-primary transition-colors">{o.match}</div>
               <div className="text-[10px] font-mono text-muted-foreground">{o.time}</div>
             </div>
             <div className="text-right flex-shrink-0">
-              <div className="text-xs font-mono text-green-400 font-bold">{o.edge}</div>
-              <div className="text-[10px] font-mono text-muted-foreground">AI: {o.ai}%</div>
+              <div className={`text-xs font-mono font-bold ${o.edge_value >= 0 ? "text-green-400" : "text-destructive"}`}>{o.edge}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">AI: {o.ai_confidence}%</div>
             </div>
             <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
           </div>

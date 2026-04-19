@@ -25,9 +25,10 @@ class TestModelLoader:
         from services.ml_service.model_loader import clear_cache
         clear_cache()
 
-    def test_load_with_cache_disabled_returns_none_for_missing(self):
+    def test_load_with_cache_disabled_returns_none_for_truly_missing(self):
+        """Using a truly nonexistent model key must return None."""
         from services.ml_service.model_loader import load_model
-        result = load_model("logistic_v1", cache_enabled=False)
+        result = load_model("nonexistent_model_xyz_that_will_never_exist", cache_enabled=False)
         assert result is None
 
     def test_list_models_empty_when_no_pkls(self):

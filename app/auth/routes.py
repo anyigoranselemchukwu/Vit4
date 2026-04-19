@@ -28,7 +28,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 # ── Schemas ───────────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
-    email: str
+    email: EmailStr
     username: str
     password: str
 

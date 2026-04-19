@@ -26,8 +26,11 @@ sys.path.insert(0, str(ROOT))
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
 
+# Save to both locations so the orchestrator finds them regardless of config
 TRAINED_DIR = ROOT / "backend" / "models" / "trained"
+MODELS_DIR = ROOT / "models"
 TRAINED_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 FEATURE_COLUMNS = [
     "home_odds", "draw_odds", "away_odds",
@@ -176,9 +179,12 @@ def train_and_save(X, y, model_key, model, scaler, feature_columns):
         },
     }
 
+    # Save to both directories for compatibility
     out_path = TRAINED_DIR / f"{model_key}.pkl"
     joblib.dump(payload, out_path)
-    logger.info(f"  ✅ Saved → {out_path}")
+    mirror_path = MODELS_DIR / f"{model_key}.pkl"
+    joblib.dump(payload, mirror_path)
+    logger.info(f"  ✅ Saved → {out_path} and {mirror_path}")
     return acc
 
 

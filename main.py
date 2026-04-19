@@ -260,6 +260,8 @@ async def subscription_expiry_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.logging_config import configure_logging
+    configure_logging(level=get_env("LOG_LEVEL", "INFO"))
     print_config_status()
     print(f"🚀 VIT Network v{APP_VERSION} starting...")
 

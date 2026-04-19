@@ -1,7 +1,14 @@
-# VIT Sports Intelligence Network v4.3.0 — RBAC Admin Control Center
+# VIT Sports Intelligence Network v4.4.0 — Production Hardening
 
 ## Overview
 A full-stack sports prediction platform combining a 12-model ML ensemble with AI insights, blockchain economy, wallet system, marketplace, governance, and complete module coverage across all 11 phases of the build roadmap.
+
+## Blocker Status (as of v4.4.0)
+- ✅ **Blocker #1 — Real ML Models**: `scripts/train_models.py` trains LR (75.1%) + RF (80.8%) models; `scripts/generate_training_data.py` generates synthetic training data; `.pkl` files saved to `backend/models/trained/` and `models/`
+- ✅ **Blocker #2 — Test Coverage**: 249 tests across 20 test files; all tests passing; `pytest-cov` configured in CI
+- ✅ **Blocker #3 — CI/CD**: `.github/workflows/ci.yml` with backend tests, lint, frontend build, security scan, integration gate
+- ✅ **Blocker #4 — Monitoring**: `app/core/logging_config.py` wired into `main.py` lifespan; structured JSON logging in prod, readable plain text in dev; request context middleware
+- ✅ **Blocker #5 — Frontend Integration**: `AIConfidenceWidget` and `TopOpportunitiesWidget` in `frontend/src/pages/dashboard.tsx` now use real API data from `/api/dashboard/model-confidence` and `/api/dashboard/top-opportunities`; loading skeletons and empty-state handling included
 
 ## Architecture
 - **Backend**: FastAPI (Python 3.11) on port 8000

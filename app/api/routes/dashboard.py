@@ -2,9 +2,10 @@
 
 import logging
 from decimal import Decimal
+from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -127,3 +128,136 @@ async def get_recent_activity(
             "created_at": pred.timestamp.isoformat(),
         })
     return activity
+
+
+@router.get("/top-opportunities")
+async def get_top_opportunities(
+    limit: int = Query(default=5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return upcoming predictions with the highest positive AI edge.
+    Only includes unsettled matches with a future or recent kickoff.
+    """
+    try:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        lookback = now - timedelta(hours=6)
+
+        result = await db.execute(
+            select(Match, Prediction)
+            .join(Prediction, Match.id == Prediction.match_id)
+            .where(Match.actual_outcome.is_(None))
+            .where(Match.kickoff_time >= lookback)
+            .where(Prediction.vig_free_edge.isnot(None))
+            .order_by(desc(Prediction.vig_free_edge))
+            .limit(limit)
+        )
+        rows = result.all()
+
+        opportunities = []
+        for match, pred in rows:
+            edge_pct = round(float(pred.vig_free_edge or 0) * 100, 1)
+            ai_conf = round(float(pred.confidence or 0.75) * 100, 0)
+            kickoff = match.kickoff_time
+            if isinstance(kickoff, datetime):
+                if kickoff.date() == now.date():
+                    time_label = f"Today {kickoff.strftime('%H:%M')}"
+                elif kickoff.date() == (now + timedelta(days=1)).date():
+                    time_label = f"Tomorrow {kickoff.strftime('%H:%M')}"
+                else:
+                    time_label = kickoff.strftime("%b %d %H:%M")
+            else:
+                time_label = str(kickoff)
+
+            opportunities.append({
+                "match": f"{match.home_team} vs {match.away_team}",
+                "league": match.league or "Unknown",
+                "edge": f"+{edge_pct}%" if edge_pct >= 0 else f"{edge_pct}%",
+                "edge_value": edge_pct,
+                "ai_confidence": int(ai_conf),
+                "time": time_label,
+                "bet_side": pred.bet_side,
+                "prediction_id": str(pred.id),
+                "match_id": str(match.id),
+            })
+
+        return {"opportunities": opportunities, "total": len(opportunities)}
+    except Exception as e:
+        logger.warning(f"top-opportunities error: {e}")
+        return {"opportunities": [], "total": 0}
+
+
+@router.get("/model-confidence")
+async def get_model_confidence(db: AsyncSession = Depends(get_db)):
+    """
+    Return per-model confidence and historical accuracy from the AI model registry.
+    Falls back to latest prediction metadata if registry is unavailable.
+    """
+    try:
+        from app.modules.ai.models import ModelMetadata
+        result = await db.execute(
+            select(ModelMetadata).order_by(ModelMetadata.accuracy_score.desc())
+        )
+        models = result.scalars().all()
+
+        if models:
+            model_list = []
+            for m in models:
+                model_list.append({
+                    "name": m.model_name or m.model_key,
+                    "key": m.model_key,
+                    "accuracy": round(float(m.accuracy_score or 0) * 100, 1),
+                    "weight": round(float(m.current_weight or 1.0), 3),
+                    "predictions": m.total_predictions or 0,
+                    "status": "active" if m.is_active else "inactive",
+                })
+
+            total_weight = sum(m["weight"] for m in model_list if m["status"] == "active")
+            ensemble_accuracy = (
+                sum(m["accuracy"] * m["weight"] for m in model_list if m["status"] == "active")
+                / total_weight
+                if total_weight > 0
+                else 0.0
+            )
+
+            return {
+                "models": model_list,
+                "ensemble_accuracy": round(ensemble_accuracy, 1),
+                "active_count": sum(1 for m in model_list if m["status"] == "active"),
+            }
+    except Exception as e:
+        logger.debug(f"model-confidence registry fallback: {e}")
+
+    # Fallback: synthesize from latest prediction audit
+    try:
+        from app.modules.ai.models import AIPredictionAudit
+        result = await db.execute(
+            select(AIPredictionAudit).order_by(AIPredictionAudit.created_at.desc()).limit(1)
+        )
+        audit = result.scalar_one_or_none()
+        if audit and audit.model_outputs:
+            model_outputs = audit.model_outputs
+            models_data = []
+            for key, val in model_outputs.items():
+                if isinstance(val, dict):
+                    conf = val.get("confidence", 0.75)
+                    models_data.append({
+                        "name": key.replace("_v1", "").replace("_", " ").title(),
+                        "key": key,
+                        "accuracy": round(float(conf) * 100, 1),
+                        "weight": 1.0,
+                        "predictions": 0,
+                        "status": "active",
+                    })
+            if models_data:
+                avg_acc = sum(m["accuracy"] for m in models_data) / len(models_data)
+                return {
+                    "models": models_data,
+                    "ensemble_accuracy": round(avg_acc, 1),
+                    "active_count": len(models_data),
+                }
+    except Exception as e:
+        logger.debug(f"model-confidence audit fallback: {e}")
+
+    # Final fallback — return empty gracefully
+    return {"models": [], "ensemble_accuracy": 0.0, "active_count": 0}

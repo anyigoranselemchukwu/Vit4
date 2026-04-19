@@ -325,3 +325,46 @@ export function useWithdraw() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() }),
   });
 }
+
+export interface TopOpportunity {
+  match: string;
+  league: string;
+  edge: string;
+  edge_value: number;
+  ai_confidence: number;
+  time: string;
+  bet_side: string;
+  prediction_id: string;
+  match_id: string;
+}
+
+export interface ModelConfidence {
+  name: string;
+  key: string;
+  accuracy: number;
+  weight: number;
+  predictions: number;
+  status: string;
+}
+
+export function useGetTopOpportunities(limit = 5) {
+  return useQuery<{ opportunities: TopOpportunity[]; total: number }>({
+    queryKey: ["dashboard-top-opportunities", limit],
+    queryFn: () => apiGet<{ opportunities: TopOpportunity[]; total: number }>(
+      `/api/dashboard/top-opportunities?limit=${limit}`
+    ),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+}
+
+export function useGetModelConfidence() {
+  return useQuery<{ models: ModelConfidence[]; ensemble_accuracy: number; active_count: number }>({
+    queryKey: ["dashboard-model-confidence"],
+    queryFn: () => apiGet<{ models: ModelConfidence[]; ensemble_accuracy: number; active_count: number }>(
+      "/api/dashboard/model-confidence"
+    ),
+    refetchInterval: 120_000,
+    retry: 1,
+  });
+}
