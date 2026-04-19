@@ -20,7 +20,7 @@ import {
   Globe, Coins, CreditCard, BookOpen, Cpu, Key, RefreshCw,
   Trash2, Ban, Edit, Plus, CheckCircle, XCircle, AlertCircle,
   TrendingUp, Server, Zap, Save, Search, Eye, EyeOff,
-  ChevronRight, Shield, Lock, Unlock,
+  ChevronRight, Shield, Lock, Unlock, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -120,6 +120,11 @@ function DashboardTab() {
     onSuccess: (d: any) => toast.success(`Backup: ${d.backup}`),
     onError: () => toast.error("Backup failed"),
   });
+  const fetchFixtures = useMutation({
+    mutationFn: () => apiPost("/admin/matches/fetch-fixtures", { count: 20 }),
+    onSuccess: (d: any) => toast.success(`Pipeline: fetched ${d.stored ?? 0} fixtures`),
+    onError: () => toast.error("Fixture fetch failed"),
+  });
 
   const kpis = [
     { label: "Total Users",    value: stats?.users ?? 0,         icon: Users,      color: "text-cyan-400" },
@@ -201,16 +206,17 @@ function DashboardTab() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             {[
-              { label: "Refresh Stats",   icon: RefreshCw, action: () => qc.invalidateQueries({ queryKey: ["admin-stats"] }), color: "border-cyan-500/30 hover:border-cyan-400 text-cyan-400" },
-              { label: "Clear Cache",     icon: Zap,        action: () => clearCache.mutate(), color: "border-purple-500/30 hover:border-purple-400 text-purple-400" },
-              { label: "Create Backup",   icon: Database,   action: () => backup.mutate(), color: "border-emerald-500/30 hover:border-emerald-400 text-emerald-400" },
-              { label: "Reload Health",   icon: Activity,   action: () => qc.invalidateQueries({ queryKey: ["admin-health"] }), color: "border-amber-500/30 hover:border-amber-400 text-amber-400" },
+              { label: "Refresh Stats",   icon: RefreshCw,  action: () => qc.invalidateQueries({ queryKey: ["admin-stats"] }),  color: "border-cyan-500/30 hover:border-cyan-400 text-cyan-400",     loading: false },
+              { label: "Clear Cache",     icon: Zap,         action: () => clearCache.mutate(),    color: "border-purple-500/30 hover:border-purple-400 text-purple-400", loading: clearCache.isPending },
+              { label: "Create Backup",   icon: Database,    action: () => backup.mutate(),         color: "border-emerald-500/30 hover:border-emerald-400 text-emerald-400", loading: backup.isPending },
+              { label: "Reload Health",   icon: Activity,    action: () => qc.invalidateQueries({ queryKey: ["admin-health"] }), color: "border-amber-500/30 hover:border-amber-400 text-amber-400", loading: false },
+              { label: "Fetch Fixtures",  icon: Download,    action: () => fetchFixtures.mutate(), color: "border-rose-500/30 hover:border-rose-400 text-rose-400",       loading: fetchFixtures.isPending },
             ].map(a => (
-              <Button key={a.label} variant="outline"
+              <Button key={a.label} variant="outline" disabled={a.loading}
                 className={`flex flex-col h-16 gap-1 bg-transparent border ${a.color}`}
                 onClick={a.action}>
-                <a.icon className="w-4 h-4" />
-                <span className="text-xs">{a.label}</span>
+                <a.icon className={`w-4 h-4 ${a.loading ? "animate-spin" : ""}`} />
+                <span className="text-xs">{a.loading ? "Working…" : a.label}</span>
               </Button>
             ))}
           </CardContent>
@@ -251,8 +257,8 @@ function DashboardTab() {
 
 function UsersTab() {
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [tierFilter, setTierFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all_roles");
+  const [tierFilter, setTierFilter] = useState("all_tiers");
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [newUser, setNewUser] = useState({ email: "", username: "", password: "", role: "user", subscription_tier: "viewer" });
@@ -264,8 +270,8 @@ function UsersTab() {
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set("search", search);
-      if (roleFilter) p.set("role", roleFilter);
-      if (tierFilter) p.set("tier", tierFilter);
+      if (roleFilter && roleFilter !== "all_roles") p.set("role", roleFilter);
+      if (tierFilter && tierFilter !== "all_tiers") p.set("tier", tierFilter);
       return apiGet(`/admin/users?${p}`);
     },
   });
@@ -319,7 +325,7 @@ function UsersTab() {
             <SelectValue placeholder="All roles" />
           </SelectTrigger>
           <SelectContent className="bg-gray-800 border-gray-700">
-            <SelectItem value="">All roles</SelectItem>
+            <SelectItem value="all_roles">All roles</SelectItem>
             <SelectItem value="user">User</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
             <SelectItem value="validator">Validator</SelectItem>
@@ -330,7 +336,7 @@ function UsersTab() {
             <SelectValue placeholder="All tiers" />
           </SelectTrigger>
           <SelectContent className="bg-gray-800 border-gray-700">
-            <SelectItem value="">All tiers</SelectItem>
+            <SelectItem value="all_tiers">All tiers</SelectItem>
             <SelectItem value="viewer">Viewer</SelectItem>
             <SelectItem value="analyst">Analyst</SelectItem>
             <SelectItem value="pro">Pro</SelectItem>
@@ -466,9 +472,9 @@ function UsersTab() {
                   </SelectTrigger>
                   <SelectContent className="bg-gray-800 border-gray-700">
                     <SelectItem value="viewer">Viewer (Free)</SelectItem>
-                    <SelectItem value="analyst">Analyst ($29/mo)</SelectItem>
-                    <SelectItem value="pro">Pro ($79/mo)</SelectItem>
-                    <SelectItem value="elite">Elite ($199/mo)</SelectItem>
+                    <SelectItem value="analyst">Analyst (Free)</SelectItem>
+                    <SelectItem value="pro">Pro ($19.99/mo)</SelectItem>
+                    <SelectItem value="elite">Elite ($49.99/mo)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

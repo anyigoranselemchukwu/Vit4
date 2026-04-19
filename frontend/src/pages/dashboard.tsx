@@ -219,6 +219,18 @@ export default function DashboardPage() {
     refetchInterval: 60_000,
   });
 
+  const { data: leaderboardData } = useQuery<any>({
+    queryKey: ["dashboard-leaderboard"],
+    queryFn: () => apiGet<any>("/api/dashboard/leaderboard"),
+    refetchInterval: 120_000,
+  });
+
+  const { data: achievementsData } = useQuery<any>({
+    queryKey: ["dashboard-achievements"],
+    queryFn: () => apiGet<any>("/api/dashboard/achievements"),
+    refetchInterval: 120_000,
+  });
+
   const activityList = Array.isArray(activity) ? activity : [];
   const change24h = price?.change_24h ?? 0;
   const isLoadingCards = isLoadingSummary || isLoadingPrice;
@@ -487,12 +499,15 @@ export default function DashboardPage() {
           </Card>
 
           {/* Achievements */}
-          <AchievementBadges />
+          <AchievementBadges achievements={achievementsData?.achievements} />
         </div>
       </div>
 
       {/* ── Leaderboard ─────────────────────────────────── */}
-      <Leaderboard currentUsername={user?.username} />
+      <Leaderboard
+        entries={leaderboardData?.leaderboard}
+        currentUsername={user?.username}
+      />
 
       {/* ── Mobile FAB ──────────────────────────────────── */}
       <QuickActionsFAB />

@@ -1,12 +1,13 @@
 # app/api/routes/subscription.py
 # VIT Sports Intelligence — Subscription Plans & Feature Gating
-# Modular payment-ready architecture (Stripe integration ready)
 
 import hashlib
 import os
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,9 @@ from sqlalchemy import select
 
 from app.db.database import get_db
 from app.db.models import UserSubscription, AuditLog
+from app.api.deps import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/subscription", tags=["subscription"])
 
@@ -178,6 +182,90 @@ async def get_my_plan(request: Request, db: AsyncSession = Depends(get_db)):
     }
 
 
+class CheckoutRequest(BaseModel):
+    plan: str
+    billing: str = "monthly"  # monthly or yearly
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
+@router.post("/create-checkout")
+async def create_checkout_session(
+    body: CheckoutRequest,
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a Stripe checkout session for subscription upgrade."""
+    if body.plan not in PLANS or body.plan == "free":
+        raise HTTPException(status_code=400, detail="Invalid plan for checkout")
+
+    plan = PLANS[body.plan]
+    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "stripe_not_configured",
+                "message": "Stripe is not configured. Please add STRIPE_SECRET_KEY to your environment secrets.",
+            }
+        )
+
+    price_usd = plan["price_yearly"] if body.billing == "yearly" else plan["price_monthly"]
+    amount_cents = int(price_usd * 100)
+    period_label = "year" if body.billing == "yearly" else "month"
+
+    domain = os.environ.get("REPLIT_DEV_DOMAIN") or os.environ.get("REPL_SLUG", "localhost")
+    if "replit" not in domain and "localhost" not in domain:
+        base_url = f"https://{domain}"
+    else:
+        base_url = f"https://{domain}"
+
+    success_url = body.success_url or f"{base_url}/subscription?upgraded=true&plan={body.plan}"
+    cancel_url = body.cancel_url or f"{base_url}/subscription?cancelled=true"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.stripe.com/v1/checkout/sessions",
+                auth=(stripe_key, ""),
+                data={
+                    "payment_method_types[]": "card",
+                    "line_items[0][price_data][currency]": "usd",
+                    "line_items[0][price_data][product_data][name]": f"VIT {plan['display_name']} Plan",
+                    "line_items[0][price_data][product_data][description]": f"{plan['description']} — billed per {period_label}",
+                    "line_items[0][price_data][unit_amount]": str(amount_cents),
+                    "line_items[0][quantity]": "1",
+                    "mode": "payment",
+                    "customer_email": current_user.email,
+                    "client_reference_id": str(current_user.id),
+                    "success_url": success_url,
+                    "cancel_url": cancel_url,
+                    "metadata[vit_plan]": body.plan,
+                    "metadata[vit_user_id]": str(current_user.id),
+                    "metadata[vit_billing]": body.billing,
+                },
+            )
+
+        if resp.status_code != 200:
+            err = resp.json().get("error", {})
+            logger.error(f"Stripe checkout error: {err}")
+            raise HTTPException(status_code=502, detail=f"Stripe error: {err.get('message', 'Unknown error')}")
+
+        session = resp.json()
+        return {
+            "checkout_url": session["url"],
+            "session_id": session["id"],
+            "plan": body.plan,
+            "amount_usd": price_usd,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Stripe checkout exception: {e}")
+        raise HTTPException(status_code=502, detail="Failed to create checkout session. Please try again.")
+
+
 @router.post("/upgrade")
 async def upgrade_plan(
     body: UpgradePlanRequest,
@@ -185,8 +273,8 @@ async def upgrade_plan(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Upgrade plan. Currently supports direct plan assignment.
-    When payment_token is provided, this is the Stripe integration hook.
+    Upgrade plan directly (used by admins or post-payment webhook confirmation).
+    For user-initiated upgrades, use /subscription/create-checkout instead.
     """
     if body.plan not in PLANS:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {body.plan}")
@@ -203,13 +291,6 @@ async def upgrade_plan(
     sub = result.scalar_one_or_none()
 
     now = datetime.now(timezone.utc)
-
-    if body.payment_token:
-        # TODO: Stripe integration — charge card and get subscription_id
-        # stripe_sub = await stripe_client.create_subscription(body.payment_token, body.plan)
-        # sub.stripe_subscription_id = stripe_sub.id
-        # sub.stripe_customer_id = stripe_sub.customer
-        pass
 
     if sub:
         sub.plan_name = body.plan
@@ -230,7 +311,7 @@ async def upgrade_plan(
         action="subscription_upgrade",
         actor=key_hash[:8] + "...",
         resource="subscription",
-        details={"plan": body.plan, "has_payment_token": bool(body.payment_token)},
+        details={"plan": body.plan, "source": "direct"},
         ip_address=request.client.host if request.client else None,
         status="success",
     )
@@ -241,7 +322,6 @@ async def upgrade_plan(
         "success": True,
         "plan": PLANS[body.plan],
         "message": f"Successfully upgraded to {PLANS[body.plan]['display_name']} plan.",
-        "payment_integration": "stripe_ready",
     }
 
 

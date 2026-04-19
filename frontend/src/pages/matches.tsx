@@ -91,21 +91,19 @@ export default function MatchesPage() {
         </div>
       </div>
 
-      {upcoming.length === 0 && recent.length === 0 && !isLoading && (
-        <div className="rounded-lg border border-dashed border-border p-6 text-center space-y-3">
-          <Clock className="w-8 h-8 text-muted-foreground mx-auto" />
-          <p className="font-mono text-sm text-muted-foreground uppercase">No match data in database yet.</p>
-          <p className="font-mono text-xs text-muted-foreground">
-            Use the Admin panel to fetch fixtures from Football-Data API, or submit a prediction via POST /predict.
-          </p>
-        </div>
-      )}
-
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-64 rounded-xl" />
           ))}
+        </div>
+      ) : upcoming.length === 0 && recent.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-8 text-center space-y-3">
+          <Clock className="w-10 h-10 text-muted-foreground mx-auto" />
+          <p className="font-mono text-sm text-muted-foreground uppercase tracking-wider">No match data loaded yet.</p>
+          <p className="font-mono text-xs text-muted-foreground max-w-sm mx-auto">
+            Fixtures load automatically via the data pipeline. Admins can trigger a manual sync from the Admin panel.
+          </p>
         </div>
       ) : matches.length > 0 ? (
         <>
@@ -123,8 +121,10 @@ export default function MatchesPage() {
           </div>
         </>
       ) : (
-        <div className="col-span-full text-center py-12 text-muted-foreground font-mono">
-          NO_TARGETS_FOUND — No matches for the selected filters.
+        <div className="rounded-lg border border-dashed border-border p-6 text-center space-y-2">
+          <Search className="w-8 h-8 text-muted-foreground mx-auto" />
+          <p className="font-mono text-sm text-muted-foreground">No matches for the selected filters.</p>
+          <p className="font-mono text-xs text-muted-foreground/60">Try adjusting the league or status filter.</p>
         </div>
       )}
     </div>

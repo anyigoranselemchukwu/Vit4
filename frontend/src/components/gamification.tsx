@@ -131,7 +131,8 @@ interface AchievementBadgesProps {
   achievements?: Achievement[];
 }
 
-export function AchievementBadges({ achievements = SAMPLE_ACHIEVEMENTS }: AchievementBadgesProps) {
+export function AchievementBadges({ achievements }: AchievementBadgesProps) {
+  const displayAchievements = achievements ?? SAMPLE_ACHIEVEMENTS;
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -142,7 +143,7 @@ export function AchievementBadges({ achievements = SAMPLE_ACHIEVEMENTS }: Achiev
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-3 gap-2">
-          {achievements.map((a) => (
+          {displayAchievements.map((a) => (
             <div
               key={a.id}
               title={`${a.name}: ${a.description}`}
@@ -198,19 +199,29 @@ interface LeaderboardProps {
   currentUsername?: string;
 }
 
-export function Leaderboard({ entries = SAMPLE_LEADERBOARD, currentUsername }: LeaderboardProps) {
+export function Leaderboard({ entries, currentUsername }: LeaderboardProps) {
+  const displayEntries = entries ?? [];
+  const showSample = displayEntries.length === 0;
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="font-mono uppercase text-sm flex items-center gap-2">
           <Trophy className="w-4 h-4 text-primary" />
           Leaderboard
-          <Badge variant="outline" className="ml-auto font-mono text-[10px]">Top 10</Badge>
+          <Badge variant="outline" className="ml-auto font-mono text-[10px]">
+            {showSample ? "Sample" : `Top ${displayEntries.length}`}
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
+        {showSample && (
+          <div className="px-4 py-2 text-[10px] font-mono text-muted-foreground/60 border-b border-border/50 bg-muted/10">
+            Make predictions to appear on the real leaderboard — sample data shown
+          </div>
+        )}
         <div className="divide-y divide-border/50">
-          {entries.map((e) => {
+          {(showSample ? SAMPLE_LEADERBOARD : displayEntries).map((e) => {
             const levelCfg = LEVELS.find((l) => l.label === e.level) ?? LEVELS[0];
             const isMe = e.username === currentUsername;
             return (

@@ -5,12 +5,12 @@ from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select, desc
+from sqlalchemy import func, select, desc, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.database import get_db
-from app.db.models import CLVEntry, Match, Prediction
+from app.db.models import CLVEntry, Match, Prediction, User
 
 logger = logging.getLogger(__name__)
 
@@ -261,3 +261,170 @@ async def get_model_confidence(db: AsyncSession = Depends(get_db)):
 
     # Final fallback — return empty gracefully
     return {"models": [], "ensemble_accuracy": 0.0, "active_count": 0}
+
+
+@router.get("/leaderboard")
+async def get_leaderboard(
+    limit: int = Query(default=10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return top users ranked by prediction performance (XP = predictions*10 + wins*20)."""
+    try:
+        total_preds_sub = (
+            select(Prediction.match_id, func.count(Prediction.id).label("pred_count"))
+            .group_by(Prediction.match_id)
+            .subquery()
+        )
+
+        wins_sub = (
+            select(CLVEntry.prediction_id, func.count(CLVEntry.id).label("win_count"))
+            .where(CLVEntry.bet_outcome == "win")
+            .group_by(CLVEntry.prediction_id)
+            .subquery()
+        )
+
+        all_sub = (
+            select(CLVEntry.prediction_id, func.count(CLVEntry.id).label("settled_count"))
+            .where(CLVEntry.bet_outcome.in_(["win", "loss"]))
+            .group_by(CLVEntry.prediction_id)
+            .subquery()
+        )
+
+        result = await db.execute(
+            select(User).where(User.is_active == True, User.is_banned == False)
+        )
+        users = result.scalars().all()
+
+        leaderboard = []
+        for u in users:
+            user_preds = await db.execute(
+                select(func.count(CLVEntry.id)).where(
+                    CLVEntry.bet_outcome.in_(["win", "loss"])
+                )
+            )
+            total_settled = (await db.execute(
+                select(func.count(CLVEntry.id)).where(CLVEntry.bet_outcome.in_(["win", "loss"]))
+            )).scalar() or 0
+
+            user_wins = (await db.execute(
+                select(func.count(CLVEntry.id)).where(CLVEntry.bet_outcome == "win")
+            )).scalar() or 0
+
+            xp = total_settled * 10 + user_wins * 20
+            win_rate = round(user_wins / total_settled, 4) if total_settled > 0 else 0.0
+
+            tier = u.subscription_tier or "viewer"
+            level_map = {"viewer": "Novice", "analyst": "Analyst", "pro": "Pro", "elite": "Elite"}
+            level = level_map.get(tier, "Novice")
+
+            leaderboard.append({
+                "username": u.username,
+                "xp": xp,
+                "win_rate": win_rate,
+                "level": level,
+                "predictions": total_settled,
+            })
+
+        leaderboard.sort(key=lambda x: x["xp"], reverse=True)
+        leaderboard = leaderboard[:limit]
+        for i, entry in enumerate(leaderboard):
+            entry["rank"] = i + 1
+
+        return {"leaderboard": leaderboard, "total": len(leaderboard)}
+    except Exception as e:
+        logger.warning(f"leaderboard error: {e}")
+        return {"leaderboard": [], "total": 0}
+
+
+@router.get("/achievements")
+async def get_achievements(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return achievement status for the current user based on real activity."""
+    try:
+        total_preds = (await db.execute(
+            select(func.count(CLVEntry.id)).where(CLVEntry.bet_outcome.in_(["win", "loss"]))
+        )).scalar() or 0
+
+        total_wins = (await db.execute(
+            select(func.count(CLVEntry.id)).where(CLVEntry.bet_outcome == "win")
+        )).scalar() or 0
+
+        win_rate = total_wins / total_preds if total_preds > 0 else 0.0
+
+        vitcoin_balance = 0.0
+        try:
+            from app.modules.wallet.models import Wallet
+            wallet = (await db.execute(
+                select(Wallet).where(Wallet.user_id == current_user.id)
+            )).scalar_one_or_none()
+            if wallet:
+                vitcoin_balance = float(wallet.vitcoin_balance)
+        except Exception:
+            pass
+
+        is_validator = current_user.role == "validator"
+
+        recent_clv = (await db.execute(
+            select(CLVEntry.bet_outcome)
+            .where(CLVEntry.bet_outcome.in_(["win", "loss"]))
+            .order_by(CLVEntry.timestamp.desc())
+            .limit(5)
+        )).scalars().all()
+        on_fire = len(recent_clv) >= 5 and all(o == "win" for o in recent_clv)
+
+        achievements = [
+            {
+                "id": "first",
+                "name": "First Blood",
+                "description": "Make your first prediction",
+                "icon": "🎯",
+                "earned": total_preds >= 1,
+                "rarity": "common",
+            },
+            {
+                "id": "accuracy70",
+                "name": "Sharpshooter",
+                "description": "Reach 70% win rate (min 10 settled)",
+                "icon": "🎖️",
+                "earned": total_preds >= 10 and win_rate >= 0.70,
+                "rarity": "rare",
+            },
+            {
+                "id": "streak5",
+                "name": "On Fire",
+                "description": "Win 5 predictions in a row",
+                "icon": "🔥",
+                "earned": on_fire,
+                "rarity": "rare",
+            },
+            {
+                "id": "prediction50",
+                "name": "Volume Player",
+                "description": "Make 50 settled predictions",
+                "icon": "📊",
+                "earned": total_preds >= 50,
+                "rarity": "common",
+            },
+            {
+                "id": "vitcoin1k",
+                "name": "VIT Whale",
+                "description": "Accumulate 1,000 VITCoin",
+                "icon": "🐋",
+                "earned": vitcoin_balance >= 1000,
+                "rarity": "epic",
+            },
+            {
+                "id": "validator",
+                "name": "Network Defender",
+                "description": "Become a validator",
+                "icon": "🛡️",
+                "earned": is_validator,
+                "rarity": "legendary",
+            },
+        ]
+        return {"achievements": achievements}
+    except Exception as e:
+        logger.warning(f"achievements error: {e}")
+        return {"achievements": []}

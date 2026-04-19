@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/apiClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Zap, Star, Check, Minus } from "lucide-react";
+import { Crown, Zap, Star, Check, Minus, ExternalLink, AlertCircle } from "lucide-react";
+import { useLocation } from "wouter";
 
 const PLAN_ICONS: Record<string, React.ElementType> = {
   free: Star,
@@ -44,38 +45,44 @@ interface Plan {
 export default function SubscriptionPage() {
   const qc = useQueryClient();
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [location] = useLocation();
+
+  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const upgradedPlan = params.get("upgraded");
+  const cancelledPlan = params.get("cancelled");
 
   const { data: plansData, isLoading: loadingPlans } = useQuery({
     queryKey: ["subscription-plans"],
     queryFn: () => apiGet<{ plans: Plan[] }>("/subscription/plans"),
   });
 
-  const { data: myPlanData, isLoading: loadingMyPlan } = useQuery({
+  const { data: myPlanData } = useQuery({
     queryKey: ["my-plan"],
     queryFn: () => apiGet<{ plan: Plan; subscription: unknown; usage: { predictions_today: number; limit_today: number | null } }>("/subscription/my-plan"),
   });
 
-  const upgradeMutation = useMutation({
-    mutationFn: (plan: string) => apiPost("/subscription/upgrade", { plan }),
-    onSuccess: (_, plan) => {
-      setMessage(`Successfully upgraded to ${plan} plan!`);
-      setError("");
-      qc.invalidateQueries({ queryKey: ["my-plan"] });
+  const checkoutMutation = useMutation({
+    mutationFn: ({ plan, billing }: { plan: string; billing: string }) =>
+      apiPost<{ checkout_url: string; amount_usd: number }>("/subscription/create-checkout", { plan, billing }),
+    onSuccess: (data) => {
+      window.location.href = data.checkout_url;
     },
-    onError: (err: Error) => {
-      setError(err.message);
-      setMessage("");
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail || err?.message || "Checkout failed";
+      const msg = typeof detail === "object" ? detail.message : detail;
+      setError(msg);
+      setUpgrading(null);
     },
-    onSettled: () => setUpgrading(null),
   });
 
   const handleUpgrade = (plan: string) => {
     setUpgrading(plan);
     setMessage("");
     setError("");
-    upgradeMutation.mutate(plan);
+    checkoutMutation.mutate({ plan, billing });
   };
 
   const plans = plansData?.plans || [];
@@ -89,6 +96,19 @@ export default function SubscriptionPage() {
         <p className="text-muted-foreground font-mono text-sm">Unlock the full power of VIT Sports Intelligence.</p>
       </div>
 
+      {upgradedPlan && (
+        <div className="p-4 rounded-lg border border-primary/40 bg-primary/10 text-primary font-mono text-sm flex items-center gap-2">
+          <Check className="w-4 h-4 flex-shrink-0" />
+          Payment received! Your {upgradedPlan} plan is being activated. It may take a moment to update.
+        </div>
+      )}
+      {cancelledPlan && (
+        <div className="p-3 rounded-lg border border-border bg-card/50 text-muted-foreground font-mono text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          Checkout cancelled. Your current plan is unchanged.
+        </div>
+      )}
+
       {usage && (
         <div className="flex flex-wrap gap-4 p-4 bg-card/50 border border-border rounded-lg font-mono text-sm">
           <span className="text-muted-foreground">Current plan: <span className="text-primary font-bold uppercase">{currentPlan}</span></span>
@@ -96,9 +116,26 @@ export default function SubscriptionPage() {
         </div>
       )}
 
+      {/* Billing toggle */}
+      <div className="flex items-center justify-center gap-3 font-mono text-sm">
+        <button
+          className={`px-4 py-1.5 rounded-full border transition-colors ${billing === "monthly" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+          onClick={() => setBilling("monthly")}
+        >
+          Monthly
+        </button>
+        <button
+          className={`px-4 py-1.5 rounded-full border transition-colors ${billing === "yearly" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+          onClick={() => setBilling("yearly")}
+        >
+          Yearly <span className="text-xs text-green-400 ml-1">Save 25%</span>
+        </button>
+      </div>
+
       {error && (
-        <div className="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive font-mono text-sm">
-          ⚠ {error}
+        <div className="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive font-mono text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          {error}
         </div>
       )}
       {message && (
@@ -145,15 +182,24 @@ export default function SubscriptionPage() {
                   <div>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-bold font-mono">
-                        {plan.price_monthly === 0 ? "Free" : `$${plan.price_monthly}`}
+                        {plan.price_monthly === 0
+                          ? "Free"
+                          : billing === "yearly"
+                          ? `$${plan.price_yearly}`
+                          : `$${plan.price_monthly}`}
                       </span>
                       {plan.price_monthly > 0 && (
-                        <span className="text-muted-foreground text-sm font-mono">/mo</span>
+                        <span className="text-muted-foreground text-sm font-mono">/{billing === "yearly" ? "yr" : "mo"}</span>
                       )}
                     </div>
-                    {plan.price_monthly > 0 && (
+                    {plan.price_monthly > 0 && billing === "monthly" && (
                       <p className="text-xs text-muted-foreground font-mono mt-1">
                         or ${plan.price_yearly}/yr (save {Math.round((1 - plan.price_yearly / (plan.price_monthly * 12)) * 100)}%)
+                      </p>
+                    )}
+                    {plan.price_monthly > 0 && billing === "yearly" && (
+                      <p className="text-xs text-green-400 font-mono mt-1">
+                        Save ${((plan.price_monthly * 12) - plan.price_yearly).toFixed(2)} vs monthly
                       </p>
                     )}
                   </div>
@@ -187,12 +233,13 @@ export default function SubscriptionPage() {
                       </div>
                     ) : isUpgrade ? (
                       <Button
-                        className="w-full font-mono text-xs"
+                        className="w-full font-mono text-xs gap-1.5"
                         variant={plan.name === "elite" ? "secondary" : "default"}
                         onClick={() => handleUpgrade(plan.name)}
-                        disabled={upgrading === plan.name}
+                        disabled={upgrading === plan.name || checkoutMutation.isPending}
                       >
-                        {upgrading === plan.name ? "Upgrading..." : `Upgrade to ${plan.display_name}`}
+                        <ExternalLink className="w-3 h-3" />
+                        {upgrading === plan.name ? "Redirecting to payment..." : `Upgrade to ${plan.display_name}`}
                       </Button>
                     ) : null}
                   </div>
@@ -203,8 +250,9 @@ export default function SubscriptionPage() {
         </div>
       )}
 
-      <div className="p-4 rounded-lg bg-card/30 border border-secondary/20 font-mono text-xs text-muted-foreground">
-        <span className="text-secondary font-bold">PAYMENT:</span> Stripe integration ready. Once connected, you'll be charged monthly and can cancel anytime.
+      <div className="p-4 rounded-lg bg-card/30 border border-secondary/20 font-mono text-xs text-muted-foreground space-y-1">
+        <div><span className="text-secondary font-bold">PAYMENT:</span> Secured by Stripe. You'll be redirected to Stripe's hosted checkout page to complete your payment securely.</div>
+        <div className="text-muted-foreground/60">Cards accepted: Visa, Mastercard, Amex, and more. Cancel anytime.</div>
       </div>
     </div>
   );
