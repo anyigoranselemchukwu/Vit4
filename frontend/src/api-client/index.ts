@@ -16,9 +16,12 @@ const API = {
     vitcoinPrice: "/api/dashboard/vitcoin-price",
     recentActivity: "/api/dashboard/recent-activity",
   },
-  matches: "/history",
-  match: (id: string) => `/history/${id}`,
+  matches: "/matches/upcoming",
+  matchesExplore: "/matches/explore",
+  matchesRecent: "/matches/recent",
+  match: (id: string) => `/matches/${id}`,
   predictions: "/history",
+  analyticsMyStats: "/analytics/my",
   training: {
     jobs: "/api/training/jobs",
     upload: "/api/training/upload",
@@ -114,12 +117,37 @@ export function useGetRecentActivity() {
 }
 
 export function useListMatches(params?: Record<string, unknown>) {
-  return useQuery<{ predictions: Match[]; total: number }>({
+  return useQuery<{ matches: Match[]; count: number }>({
     queryKey: getListMatchesQueryKey(params),
-    queryFn: () => {
+    queryFn: async () => {
       const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-      return apiGet<{ predictions: Match[]; total: number }>(API.matches + qs);
+      const data = await apiGet<{ matches: Match[]; count: number }>(API.matches + qs);
+      return data;
     },
+  });
+}
+
+export function useListMatchesExplore(params?: Record<string, unknown>) {
+  return useQuery<{ matches: Match[]; count: number }>({
+    queryKey: ["matches-explore", params],
+    queryFn: async () => {
+      const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
+      return apiGet<{ matches: Match[]; count: number }>(API.matchesExplore + qs);
+    },
+  });
+}
+
+export function useListRecentMatches() {
+  return useQuery<{ matches: Match[]; count: number }>({
+    queryKey: ["matches-recent"],
+    queryFn: () => apiGet<{ matches: Match[]; count: number }>(API.matchesRecent),
+  });
+}
+
+export function useGetMyAnalytics() {
+  return useQuery<any>({
+    queryKey: ["analytics-my"],
+    queryFn: () => apiGet<any>(API.analyticsMyStats),
   });
 }
 
@@ -128,32 +156,39 @@ export function useGetMatch(id: string) {
     queryKey: getGetMatchQueryKey(id),
     queryFn: async () => {
       const raw = await apiGet<any>(API.match(id));
-      // Backend returns nested { match, prediction, clv, markets } — flatten for the component
-      if (raw && raw.match && raw.prediction) {
+      // New /matches/{id} format: { match: {...}, predictions: [...] }
+      if (raw && raw.match) {
+        const m = raw.match;
+        const pred = raw.predictions?.[0] ?? null;
         return {
-          match_id: raw.match.id,
-          home_team: raw.match.home_team,
-          away_team: raw.match.away_team,
-          league: raw.match.league,
-          kickoff_time: raw.match.kickoff_time,
-          ft_score: raw.match.ft_score,
-          actual_outcome: raw.match.actual_outcome,
-          status: raw.match.status,
-          home_prob: raw.prediction.home_prob,
-          draw_prob: raw.prediction.draw_prob,
-          away_prob: raw.prediction.away_prob,
-          over_25_prob: raw.prediction.over_25_prob,
-          btts_prob: raw.prediction.btts_prob,
-          consensus_prob: raw.prediction.consensus_prob,
-          recommended_stake: raw.prediction.recommended_stake,
-          final_ev: raw.prediction.final_ev,
-          edge: raw.prediction.edge,
-          confidence: raw.prediction.confidence,
-          bet_side: raw.prediction.bet_side,
-          entry_odds: raw.prediction.entry_odds,
-          clv: raw.clv?.clv ?? null,
-          profit: raw.clv?.profit ?? null,
-          timestamp: raw.prediction.timestamp,
+          match_id: m.match_id ?? m.id,
+          home_team: m.home_team,
+          away_team: m.away_team,
+          league: m.league,
+          kickoff_time: m.kickoff_time,
+          ft_score: m.ft_score ?? null,
+          actual_outcome: m.actual_outcome,
+          status: m.status,
+          home_goals: m.home_goals,
+          away_goals: m.away_goals,
+          odds: m.odds,
+          home_prob: pred?.home_prob ?? m.home_prob ?? null,
+          draw_prob: pred?.draw_prob ?? m.draw_prob ?? null,
+          away_prob: pred?.away_prob ?? m.away_prob ?? null,
+          over_25_prob: pred?.over_25_prob ?? m.over_25_prob ?? null,
+          btts_prob: pred?.btts_prob ?? m.btts_prob ?? null,
+          consensus_prob: pred?.consensus_prob ?? m.consensus_prob ?? null,
+          recommended_stake: pred?.recommended_stake ?? m.recommended_stake ?? null,
+          final_ev: pred?.final_ev ?? null,
+          edge: pred?.edge ?? m.edge ?? null,
+          confidence: pred?.confidence ?? m.confidence ?? null,
+          bet_side: pred?.bet_side ?? m.bet_side ?? null,
+          entry_odds: pred?.entry_odds ?? m.entry_odds ?? null,
+          clv: null,
+          profit: null,
+          timestamp: pred?.timestamp ?? m.kickoff_time,
+          predictions_count: raw.predictions_count,
+          _all_predictions: raw.predictions,
           // Pass through extra rich data for extended display
           _markets: raw.markets,
           _model_summary: raw.model_summary,
@@ -366,5 +401,28 @@ export function useGetModelConfidence() {
     ),
     refetchInterval: 120_000,
     retry: 1,
+  });
+}
+
+export function useAdminFetchFixtures() {
+  const queryClient = useQueryClient();
+  return useMutation<{ stored: number; skipped_existing: number; errors: number; message: string }, Error, { days?: number; count?: number }>({
+    mutationFn: ({ days = 7, count = 50 } = {}) =>
+      apiPost<any>(`/admin/matches/fetch-fixtures?days=${days}&count=${count}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["matches-explore"] });
+      queryClient.invalidateQueries({ queryKey: ["matches-recent"] });
+    },
+  });
+}
+
+export function useAdminFetchLive() {
+  const queryClient = useQueryClient();
+  return useMutation<{ live_count: number; db_updated: number }, Error, void>({
+    mutationFn: () => apiPost<any>("/admin/matches/fetch-live"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+    },
   });
 }

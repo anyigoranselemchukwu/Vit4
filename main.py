@@ -48,6 +48,7 @@ from app.api.routes import (
     odds_compare as odds_route,
     subscription as subscription_route,
     audit as audit_route,
+    matches as matches_route,
 )
 
 # ===== AUTH ROUTES =====
@@ -682,6 +683,7 @@ async def unhandled_error_handler(request: Request, exc: Exception):
 app.include_router(predict.router)
 app.include_router(result.router)
 app.include_router(history.router)
+app.include_router(matches_route.router)
 app.include_router(admin.router)
 app.include_router(training_route.router)
 app.include_router(analytics_route.router)

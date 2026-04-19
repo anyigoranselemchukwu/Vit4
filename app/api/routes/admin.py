@@ -1259,6 +1259,108 @@ async def get_live_fixtures(api_key: Optional[str] = Query(default=None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/matches/fetch-fixtures")
+async def admin_fetch_and_store_fixtures(
+    api_key: Optional[str] = Query(default=None),
+    days: int = Query(default=7, ge=1, le=30),
+    count: int = Query(default=50, ge=1, le=200),
+):
+    """
+    Fetch upcoming fixtures from Football-Data API and store them in the database.
+    Returns the number of new fixtures stored.
+    """
+    _verify_key(api_key)
+    football_key = os.getenv("FOOTBALL_DATA_API_KEY", "")
+    if not football_key:
+        return {"stored": 0, "message": "FOOTBALL_DATA_API_KEY not configured"}
+
+    now = datetime.now(timezone.utc)
+    date_from = now.strftime("%Y-%m-%d")
+    date_to = (now + timedelta(days=days)).strftime("%Y-%m-%d")
+
+    stored = 0
+    skipped = 0
+    errors = 0
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        async with AsyncSessionLocal() as db:
+            for league, code in COMPETITIONS.items():
+                if stored >= count:
+                    break
+                try:
+                    r = await client.get(
+                        f"https://api.football-data.org/v4/competitions/{code}/matches",
+                        headers={"X-Auth-Token": football_key},
+                        params={"status": "SCHEDULED", "dateFrom": date_from, "dateTo": date_to},
+                    )
+                    if r.status_code == 200:
+                        for m in r.json().get("matches", []):
+                            if stored >= count:
+                                break
+                            ext_id = str(m.get("id", ""))
+                            existing = (await db.execute(
+                                select(Match).where(Match.external_id == ext_id)
+                            )).scalar_one_or_none()
+                            if existing:
+                                skipped += 1
+                                continue
+                            kickoff_str = m.get("utcDate", "")
+                            try:
+                                kickoff = datetime.fromisoformat(kickoff_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            except Exception:
+                                continue
+                            db.add(Match(
+                                external_id=ext_id,
+                                home_team=m["homeTeam"]["name"],
+                                away_team=m["awayTeam"]["name"],
+                                league=league,
+                                kickoff_time=kickoff,
+                                status="upcoming",
+                            ))
+                            stored += 1
+                    elif r.status_code == 429:
+                        logger.warning(f"Rate limit hit for {league}")
+                except Exception as e:
+                    logger.warning(f"Fetch failed for {league}: {e}")
+                    errors += 1
+            await db.commit()
+
+    return {
+        "stored": stored,
+        "skipped_existing": skipped,
+        "errors": errors,
+        "message": f"Stored {stored} new fixtures from Football-Data API",
+    }
+
+
+@router.post("/matches/fetch-live")
+async def admin_fetch_and_store_live(api_key: Optional[str] = Query(default=None)):
+    """
+    Fetch currently live matches from Football-Data API and update their status in the database.
+    """
+    _verify_key(api_key)
+    try:
+        live = await fetch_live_matches()
+        updated = 0
+        if live:
+            async with AsyncSessionLocal() as db:
+                for fixture in live:
+                    ext_id = str(fixture.get("fixture_id") or fixture.get("id") or "")
+                    if not ext_id:
+                        continue
+                    existing = (await db.execute(
+                        select(Match).where(Match.external_id == ext_id)
+                    )).scalar_one_or_none()
+                    if existing:
+                        existing.status = "live"
+                        updated += 1
+                await db.commit()
+        return {"live_count": len(live), "db_updated": updated, "fixtures": live}
+    except Exception as e:
+        logger.error(f"Live fetch+store failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/stream-predictions")
 async def stream_predictions(
     api_key: Optional[str] = Query(default=None),

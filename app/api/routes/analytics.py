@@ -441,7 +441,117 @@ async def export_csv(
     )
 
 
-# ── 6. Summary (single-call dashboard data) ───────────────────────────
+# ── 6. My Analytics (user-specific stats) ─────────────────────────────
+@router.get("/my")
+async def get_my_analytics(db: AsyncSession = Depends(get_db)):
+    """
+    Per-user analytics: win rate, ROI, CLV, accuracy by league/market.
+    Uses all predictions in the system (scope by user_id once auth is wired).
+    """
+    base_q = (
+        select(Match, Prediction, CLVEntry)
+        .join(Prediction, Match.id == Prediction.match_id)
+        .outerjoin(CLVEntry, Prediction.id == CLVEntry.prediction_id)
+        .order_by(Prediction.timestamp.asc())
+    )
+
+    result = await db.execute(base_q)
+    rows = result.all()
+
+    total_predictions = len(rows)
+    settled = [r for r in rows if r.Match.actual_outcome]
+    wins = [r for r in settled if r.Prediction.bet_side and r.Match.actual_outcome and
+            r.Prediction.bet_side.lower() == r.Match.actual_outcome.lower()]
+
+    win_rate = round(len(wins) / len(settled), 4) if settled else 0.0
+
+    total_staked = 0.0
+    total_profit = 0.0
+    for r in settled:
+        stake_pct = float(r.Prediction.recommended_stake or 0)
+        entry_odds = float(r.Prediction.entry_odds or 2.0)
+        bet_side = r.Prediction.bet_side or ""
+        actual = r.Match.actual_outcome or ""
+        stake_amount = 1000 * stake_pct
+        total_staked += stake_amount
+        won = bet_side.lower() == actual.lower()
+        if r.CLVEntry and r.CLVEntry.profit is not None:
+            total_profit += float(r.CLVEntry.profit)
+        else:
+            profit = stake_amount * (entry_odds - 1) if won else -stake_amount
+            total_profit += profit
+
+    roi = round(total_profit / total_staked, 4) if total_staked > 0 else 0.0
+
+    clv_values = [float(r.CLVEntry.clv) for r in rows if r.CLVEntry and r.CLVEntry.clv is not None]
+    avg_clv = round(sum(clv_values) / len(clv_values), 4) if clv_values else 0.0
+
+    avg_confidence = 0.0
+    conf_values = [float(r.Prediction.confidence) for r in rows if r.Prediction.confidence]
+    if conf_values:
+        avg_confidence = round(sum(conf_values) / len(conf_values), 4)
+
+    avg_edge = 0.0
+    edge_values = [float(r.Prediction.vig_free_edge) for r in rows if r.Prediction.vig_free_edge and r.Prediction.vig_free_edge > 0]
+    if edge_values:
+        avg_edge = round(sum(edge_values) / len(edge_values), 4)
+
+    # Accuracy by league
+    league_stats: dict = {}
+    for r in settled:
+        lg = r.Match.league or "unknown"
+        if lg not in league_stats:
+            league_stats[lg] = {"total": 0, "wins": 0}
+        league_stats[lg]["total"] += 1
+        if r.Prediction.bet_side and r.Match.actual_outcome:
+            if r.Prediction.bet_side.lower() == r.Match.actual_outcome.lower():
+                league_stats[lg]["wins"] += 1
+
+    accuracy_by_league = {
+        lg: round(v["wins"] / v["total"], 4) if v["total"] > 0 else 0.0
+        for lg, v in league_stats.items()
+    }
+
+    # Accuracy by market (bet_side)
+    market_stats: dict = {}
+    for r in settled:
+        side = r.Prediction.bet_side or "unknown"
+        if side not in market_stats:
+            market_stats[side] = {"total": 0, "wins": 0}
+        market_stats[side]["total"] += 1
+        if r.Prediction.bet_side and r.Match.actual_outcome:
+            if r.Prediction.bet_side.lower() == r.Match.actual_outcome.lower():
+                market_stats[side]["wins"] += 1
+
+    accuracy_by_market = {
+        side: round(v["wins"] / v["total"], 4) if v["total"] > 0 else 0.0
+        for side, v in market_stats.items()
+    }
+
+    avg_stake = 0.0
+    stake_vals = [float(r.Prediction.recommended_stake or 0) for r in rows if r.Prediction.recommended_stake]
+    if stake_vals:
+        avg_stake = round(sum(stake_vals) / len(stake_vals), 4)
+
+    return {
+        "total_predictions": total_predictions,
+        "settled_predictions": len(settled),
+        "pending_predictions": total_predictions - len(settled),
+        "winning_predictions": len(wins),
+        "win_rate": win_rate,
+        "roi": roi,
+        "total_profit": round(total_profit, 2),
+        "avg_clv": avg_clv,
+        "avg_edge": avg_edge,
+        "avg_confidence": avg_confidence,
+        "average_stake": avg_stake,
+        "accuracy_by_league": accuracy_by_league,
+        "accuracy_by_market": accuracy_by_market,
+        "version": VERSION,
+    }
+
+
+# ── 7. Summary (single-call dashboard data) ───────────────────────────
 @router.get("/summary")
 async def get_summary(db: AsyncSession = Depends(get_db)):
     """Single endpoint returning all key metrics for the analytics dashboard."""

@@ -19,23 +19,28 @@ export interface Match {
   away_team: string;
   league: string;
   kickoff_time: string;
-  home_prob: number;
-  draw_prob: number;
-  away_prob: number;
-  over_25_prob?: number;
-  btts_prob?: number;
-  consensus_prob?: number;
-  recommended_stake?: number;
-  final_ev?: number;
-  edge?: number;
-  confidence?: number;
-  bet_side?: string;
-  entry_odds?: number;
-  actual_outcome?: string;
-  ft_score?: string;
-  clv?: number;
-  profit?: number;
-  timestamp: string;
+  status?: string;
+  home_goals?: number | null;
+  away_goals?: number | null;
+  home_prob?: number | null;
+  draw_prob?: number | null;
+  away_prob?: number | null;
+  over_25_prob?: number | null;
+  btts_prob?: number | null;
+  consensus_prob?: number | null;
+  recommended_stake?: number | null;
+  final_ev?: number | null;
+  edge?: number | null;
+  confidence?: number | null;
+  bet_side?: string | null;
+  entry_odds?: number | null;
+  actual_outcome?: string | null;
+  ft_score?: string | null;
+  clv?: number | null;
+  profit?: number | null;
+  timestamp?: string | null;
+  odds?: { home?: number | null; draw?: number | null; away?: number | null } | null;
+  predictions_count?: number;
 }
 
 export interface Prediction {

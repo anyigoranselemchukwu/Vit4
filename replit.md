@@ -3,6 +3,16 @@
 ## Overview
 A full-stack sports prediction platform combining a 12-model ML ensemble with AI insights, blockchain economy, wallet system, marketplace, governance, and complete module coverage across all 11 phases of the build roadmap.
 
+## Recent Changes (v4.5.0 — Match & Prediction Flow)
+- ✅ **Matches API**: `GET /matches/upcoming`, `/matches/explore`, `/matches/live`, `/matches/recent`, `/matches/{id}` all live in `app/api/routes/matches.py`
+- ✅ **Admin Fixture Sync**: `POST /admin/matches/fetch-fixtures` stores from Football-Data API; `POST /admin/matches/fetch-live` updates live match status — both in `app/api/routes/admin.py`
+- ✅ **Analytics**: `GET /analytics/my` returns per-user win_rate, ROI, edge, CLV, accuracy by league/market — in `app/api/routes/analytics.py`
+- ✅ **PredictionFlow**: New `frontend/src/components/PredictionFlow.tsx` — modal dialog for running the 12-model ML ensemble on any match with odds, stake presets, and payout preview
+- ✅ **PremiumMatchCard**: Updated with inline "Run ML Ensemble" button that opens PredictionFlow without navigating away
+- ✅ **API Client**: `useListMatches`, `useListMatchesExplore`, `useListRecentMatches`, `useGetMyAnalytics`, `useAdminFetchFixtures`, `useAdminFetchLive` hooks; Match schema updated with status/odds/goals fields
+- ✅ **matches.tsx**: Updated to consume `{ matches, count }` shape; league filter + empty state with admin guidance
+- **Note**: Football-Data API must be called via admin panel to populate upcoming matches DB. Predictions via POST /predict auto-create Match rows visible in /matches/recent.
+
 ## Blocker Status (as of v4.4.0)
 - ✅ **Blocker #1 — Real ML Models**: `scripts/train_models.py` trains LR (75.1%) + RF (80.8%) models; `scripts/generate_training_data.py` generates synthetic training data; `.pkl` files saved to `backend/models/trained/` and `models/`
 - ✅ **Blocker #2 — Test Coverage**: 249 tests across 20 test files; all tests passing; `pytest-cov` configured in CI
