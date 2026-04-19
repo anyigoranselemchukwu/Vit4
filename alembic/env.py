@@ -1,9 +1,8 @@
 # alembic/env.py
 import asyncio
 from logging.config import fileConfig
-from sqlalchemy import pool
+from sqlalchemy import pool, create_engine
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 import sys
@@ -27,11 +26,19 @@ from app.db.database import DATABASE_URL
 
 config = context.config
 
-# Convert async URL to sync URL for Alembic
+# Convert async URL to sync URL for Alembic (sync engine only)
 if "aiosqlite" in DATABASE_URL:
     sync_url = DATABASE_URL.replace("sqlite+aiosqlite", "sqlite")
+elif "asyncpg" in DATABASE_URL:
+    sync_url = DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2")
+    # Remove sslmode if present since asyncpg url may have it stripped
+    from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+    parsed = urlparse(sync_url)
+    query = dict(parse_qsl(parsed.query))
+    query.pop("sslmode", None)
+    sync_url = urlunparse(parsed._replace(query=urlencode(query)))
 else:
-    sync_url = DATABASE_URL.replace("asyncpg", "psycopg2")
+    sync_url = DATABASE_URL
 
 config.set_main_option("sqlalchemy.url", sync_url)
 
@@ -63,33 +70,12 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    """Run migrations in 'online' mode with async engine."""
-    # For SQLite, use sync engine since async drivers can be problematic
-    if "sqlite" in DATABASE_URL:
-        from sqlalchemy import create_engine
-        sync_url = DATABASE_URL.replace("sqlite+aiosqlite", "sqlite")
-        connectable = create_engine(sync_url, poolclass=pool.NullPool)
-
-        with connectable.connect() as connection:
-            do_run_migrations(connection)
-    else:
-        # Use async URL for connection, sync URL for schema generation
-        async_connectable = async_engine_from_config(
-            config.get_section(config.config_ini_section, {}),
-            prefix="sqlalchemy.",
-            poolclass=pool.NullPool,
-        )
-
-        async with async_connectable.connect() as connection:
-            await connection.run_sync(do_run_migrations)
-
-        await async_connectable.dispose()
-
-
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    """Run migrations in 'online' mode with sync engine."""
+    connectable = create_engine(sync_url, poolclass=pool.NullPool)
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
+    connectable.dispose()
 
 
 if context.is_offline_mode():

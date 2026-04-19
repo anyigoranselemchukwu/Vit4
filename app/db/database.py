@@ -7,7 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_raw_url = os.getenv("VIT_DATABASE_URL", "sqlite+aiosqlite:///./vit.db")
+_raw_url = (
+    os.getenv("VIT_DATABASE_URL")
+    or os.getenv("DATABASE_URL")
+    or "sqlite+aiosqlite:///./vit.db"
+)
 
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 

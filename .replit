@@ -22,21 +22,17 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash scripts/start_fullstack.sh"
 waitForPort = 5000
 
-[workflows.workflow.metadata]
-outputType = "webview"
-
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 5001
-externalPort = 3000
 
 [[ports]]
 localPort = 8000
@@ -47,4 +43,13 @@ externalPort = 8000
 [userenv.shared]
 ADMIN_EMAIL = "admin@vit.network"
 ADMIN_USERNAME = "vit_admin"
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
+BACKEND_PORT = "8000"
+FRONTEND_PORT = "5000"
+CORS_ALLOWED_ORIGINS = "*"
+AUTH_ENABLED = "false"
+USE_REAL_ML_MODELS = "false"
+ML_MODEL_CACHE_ENABLED = "true"
+BLOCKCHAIN_ENABLED = "false"
+BACKGROUND_TASK_CHECK_INTERVAL_SECONDS = "30"
+BACKGROUND_TASK_MAX_RESTARTS = "5"
